@@ -1,0 +1,8 @@
+<component name="ArtifactManager">
+  <artifact type="jar" name="Collectopaedia:jar">
+    <output-path>$PROJECT_DIR$/../../Xenocraft/Testing Server/plugins</output-path>
+    <root id="archive" name="Collectopaedia.jar">
+      <element id="module-output" name="Collectopaedia" />
+    </root>
+  </artifact>
+</component>

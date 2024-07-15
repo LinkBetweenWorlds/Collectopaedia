@@ -3,32 +3,25 @@ package org.xenocraft.collectopaedia.commands;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.Material;
-import org.bukkit.OfflinePlayer;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
 import org.bukkit.command.TabExecutor;
 import org.bukkit.configuration.file.FileConfiguration;
-import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.PlayerInventory;
 import org.bukkit.inventory.meta.ItemMeta;
-import org.bukkit.inventory.meta.SkullMeta;
-import org.bukkit.profile.PlayerProfile;
 import org.xenocraft.collectopaedia.Collectopaedia;
 
-import java.io.File;
-import java.lang.reflect.Array;
-import java.util.*;
+import java.util.List;
+import java.util.Objects;
 
 public class OpenMenuCommand implements TabExecutor {
 
     private final Collectopaedia collectopaedia;
-
-    public OpenMenuCommand(Collectopaedia collectopaedia){
-        this.collectopaedia = collectopaedia;
-    }
+    public int page = 0;
+    public String selectedArea = "colony9";
 
     //TODO Check player items, if they match give option to add to Collectopaedia
     //TODO Save file content: Player Name, unlocked area, deposited items in each area.
@@ -36,49 +29,57 @@ public class OpenMenuCommand implements TabExecutor {
     //TODO When menu is opened default to Colony 9
     //TODO When player first goes to new area, add to unlocked area list.
 
-    public int page = 0;
-    public String area = "colony9";
+
+    public OpenMenuCommand(Collectopaedia collectopaedia) {
+        this.collectopaedia = collectopaedia;
+    }
 
     public static void menuClick(Player p, ItemStack item) {
         p.sendMessage("You clicked " + item.getItemMeta().getDisplayName());
     }
 
 
-    public void updatePlayerInv(Player p, Inventory gui){
-        PlayerInventory playerInv =  p.getInventory();
+    public void updatePlayerInv(Player p, Inventory gui) {
+        PlayerInventory playerInv = p.getInventory();
         ItemStack[] itemList = playerInv.getContents();
         FileConfiguration playerFile = collectopaedia.loadPlayerData(p);
         List<String> playerAreas = playerFile.getStringList("unlockedArea");
         List<String> areaList = collectopaedia.areasData.getStringList("areas");
 
-        ItemStack areaItem = new ItemStack(Material.MAP);
-        ItemMeta areaMeta = areaItem.getItemMeta();
+        ItemStack selectedAreaItem = new ItemStack(Material.MAP);
+        ItemStack areaItem = new ItemStack(Material.PAPER);
+        ItemMeta areaMeta = selectedAreaItem.getItemMeta();
 
         int invSlot = 0;
 
-        for(String s : areaList){
+        for (String s : areaList) {
+            //TODO Change loop so its is dynamic and update based off the selected area
             String[] areaParts = s.split(",");
-            if(playerAreas.contains(areaParts[0].trim())){
+            if (playerAreas.contains(areaParts[0].trim())) {
                 areaMeta.setDisplayName(areaParts[1].trim());
                 areaItem.setItemMeta(areaMeta);
                 System.out.println(s);
                 System.out.println(invSlot);
-                gui.setItem(invSlot++, areaItem);
-                if(invSlot > 8 && invSlot < 44){
-                    invSlot += 8;
-                }else if(invSlot == 45){
-                    invSlot = gui.getSize() - 1;
-                }else if(invSlot > 45){
-                    invSlot -= 2;
+                if (invSlot == 1) {
+                    areaMeta.setDisplayName(selectedArea);
+                    selectedAreaItem.setItemMeta(areaMeta);
+                    gui.setItem(invSlot, selectedAreaItem);
+                } else {
+                    gui.setItem(invSlot++, areaItem);
+                    if (invSlot > 8 && invSlot < 44) {
+                        invSlot += 8;
+                    } else if (invSlot == 45) {
+                        invSlot = gui.getSize() - 1;
+                    } else if (invSlot > 45) {
+                        invSlot -= 2;
+                    }
                 }
-
             }
-
         }
 
 
-        for(ItemStack itemStack : itemList){
-            if(itemStack != null){
+        for (ItemStack itemStack : itemList) {
+            if (itemStack != null) {
             }
         }
         p.openInventory(gui);
@@ -130,7 +131,7 @@ public class OpenMenuCommand implements TabExecutor {
             for (int slot = 8; slot < invSize; slot += 9) {
                 gui.setItem(slot, lockedArea);
             }
-            for(int slot = 46; slot < invSize; slot ++){
+            for (int slot = 46; slot < invSize; slot++) {
                 gui.setItem(slot, lockedArea);
             }
 

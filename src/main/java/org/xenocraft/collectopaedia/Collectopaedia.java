@@ -29,11 +29,10 @@ public final class Collectopaedia extends JavaPlugin implements Listener {
     @Override
     public void onEnable() {
 
-
         createDataFile();
 
         getServer().getPluginManager().registerEvents(this, this);
-        getServer().getPluginManager().registerEvents(new PlayerInvClickEvent(), this);
+        getServer().getPluginManager().registerEvents(new PlayerInvClickEvent(this), this);
         getServer().getPluginManager().registerEvents(new PlayerJoinLeaveListener(this), this);
         getServer().getPluginManager().registerEvents(new PlayerChangeWorldListener(this), this);
 
@@ -63,7 +62,7 @@ public final class Collectopaedia extends JavaPlugin implements Listener {
                 newFile.createNewFile();
                 FileConfiguration playerFile = YamlConfiguration.loadConfiguration(newFile);
                 playerFile.set(uuid + ".name", p.getName());
-                List<String> list = List.of("colony9");
+                List<String> list = List.of("other", "colony9");
                 playerFile.set("unlockedArea", list);
                 playerFile.set("depositedItems", list);
                 playerFile.save(new File(getDataFolder() + "/playerData", uuid + ".yml"));
@@ -77,9 +76,10 @@ public final class Collectopaedia extends JavaPlugin implements Listener {
         FileConfiguration playerFile = loadPlayerData(p);
         List<String> areas = areasData.getStringList("areas");
         for(String a : areas){
-            if(!playerFile.contains("depositedItems." + a)){
+            String[] areaParts = a.split(",");
+            if(!playerFile.contains("depositedItems." + areaParts[0].trim())){
                 List<String> items = List.of();
-                playerFile.set("depositedItems." + a, items);
+                playerFile.set("depositedItems." + areaParts[0].trim(), items);
             }
         }
         savePlayerFile(playerFile, p);

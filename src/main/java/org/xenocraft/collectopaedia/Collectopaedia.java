@@ -62,6 +62,7 @@ public final class Collectopaedia extends JavaPlugin implements Listener {
                 newFile.createNewFile();
                 FileConfiguration playerFile = YamlConfiguration.loadConfiguration(newFile);
                 playerFile.set(uuid + ".name", p.getName());
+                playerFile.set(uuid + ".selectedArea", "colony9");
                 List<String> list = List.of("other", "colony9");
                 playerFile.set("unlockedArea", list);
                 playerFile.set("depositedItems", list);
@@ -82,6 +83,12 @@ public final class Collectopaedia extends JavaPlugin implements Listener {
                 playerFile.set("depositedItems." + areaParts[0].trim(), items);
             }
         }
+        savePlayerFile(playerFile, p);
+    }
+
+    public void updatePlayerArea(Player p, String area){
+        FileConfiguration playerFile = loadPlayerData(p);
+        playerFile.set(p.getUniqueId() + ".selectedArea", area);
         savePlayerFile(playerFile, p);
     }
 

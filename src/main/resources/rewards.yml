@@ -1,0 +1,20 @@
+other:
+  bug: AP Up V
+  parts: EXP Up V
+  strange: Critical Up V
+  all: Aggro Down V
+colony9:
+  veg: Quick Step III
+  fruit: Agility Up II
+  flower: Poison Defence III
+  bug: Regnas Gauntlets
+  parts: Ether Up II
+  strange: Strength Up II
+  all: Carbon Driver
+tephraCave:
+  fruit: Lighting Attack II
+  flower: Poison Defense III
+  animal: HP Up II
+  bug: Slow Resist II
+  nature: Attack Plus II
+  strange: Attack Stability II

@@ -9,27 +9,29 @@ import org.bukkit.command.TabExecutor;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.Inventory;
-import org.bukkit.inventory.InventoryView;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.PlayerInventory;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.xenocraft.collectopaedia.Collectopaedia;
-import org.xenocraft.collectopaedia.events.PlayerInvClickEvent;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 
 public class OpenMenuCommand implements TabExecutor {
 
-    private final Collectopaedia collectopaedia;
     public static int page = 1;
-    public String selectedArea = "colony9";
+    private final Collectopaedia collectopaedia;
+
 
     //TODO Check player items, if they match give option to add to Collectopaedia
     //TODO Save file content: Player Name, unlocked area, deposited items in each area.
     //TODO Save the player current Collectopaedia to YAML, under each area.
     //TODO When menu is opened default to Colony 9
     //TODO When player first goes to new area, add to unlocked area list.
+
+    //TODO Need to rework so it use the same command loop instead of creating a new one.
+    //TODO Get click event to update variables and call update function.
 
 
     public OpenMenuCommand(Collectopaedia collectopaedia) {
@@ -39,44 +41,73 @@ public class OpenMenuCommand implements TabExecutor {
 
     public void menuClick(Player p, ItemStack item) {
         String itemName = item.getItemMeta().getDisplayName().trim();
-        System.out.println("Menu Click");
-        if(itemName.contains("Back")){
-            System.out.println("Back");
+        Inventory inv = p.getOpenInventory().getTopInventory();
+        if (itemName.contains("Back")) {
             p.closeInventory();
-        }
-        if(itemName.contains("Next")){
-            System.out.println("Next");
-            if(page == 1){
-                page = 2;
-            }else{
+        } else if (itemName.contains("Next")) {
+            if (page == 2) {
                 page = 1;
+            } else {
+                page = 2;
             }
-            Inventory inv = p.getOpenInventory().getTopInventory();
             updatePlayerInv(p, inv);
+        } else {
+            List<String> areaList = collectopaedia.areasData.getStringList("areas");
+            for (String s : areaList) {
+                String[] areaParts = s.split(",");
+                if (itemName.contains(areaParts[1].trim())) {
+                    collectopaedia.updatePlayerArea(p, areaParts[0].trim());
+                    updatePlayerInv(p, inv);
+                }
+            }
         }
+
 
     }
 
     private void updatePlayerInv(Player p, Inventory gui) {
-
-        PlayerInventory playerInv = p.getInventory();
-        ItemStack[] itemList = playerInv.getContents();
         FileConfiguration playerFile = collectopaedia.loadPlayerData(p);
+        String selectedArea = playerFile.getString(p.getUniqueId() + ".selectedArea");
+        PlayerInventory playerInv = p.getInventory();
+
+
         List<String> playerAreas = playerFile.getStringList("unlockedArea");
+        List<String> playerCollectedItems = playerFile.getStringList("depositedItems." + selectedArea);
+        int totalItems = collectopaedia.itemsData.getInt(selectedArea + ".count");
         List<String> areaList = collectopaedia.areasData.getStringList("areas");
 
-        int invSlot = 0;
+        List<String> vegList = collectopaedia.itemsData.getStringList(selectedArea + ".veg");
+        List<String> fruitList = collectopaedia.itemsData.getStringList(selectedArea + ".fruit");
+        List<String> flowerList = collectopaedia.itemsData.getStringList(selectedArea + ".flower");
+        List<String> animalList = collectopaedia.itemsData.getStringList(selectedArea + ".animal");
+        List<String> bugList = collectopaedia.itemsData.getStringList(selectedArea + ".bug");
+        List<String> natureList = collectopaedia.itemsData.getStringList(selectedArea + ".nature");
+        List<String> partsList = collectopaedia.itemsData.getStringList(selectedArea + ".parts");
+        List<String> strangeList = collectopaedia.itemsData.getStringList(selectedArea + ".strange");
+
+
+        ItemStack[] playerItems = playerInv.getContents();
+        List<String> playerItemNames = new ArrayList<>();
+        for (ItemStack item : playerItems) {
+            if (item != null) {
+                String itemName = item.getItemMeta().getDisplayName();
+                if (itemName.contains(ChatColor.AQUA + "")) {
+                    playerItemNames.add(itemName.replace(ChatColor.AQUA + "", ""));
+                }
+            }
+        }
 
         //Area Items
+        int invSlot = 0;
         ItemStack areaItem = new ItemStack(Material.PAPER);
         ItemMeta areaMeta = areaItem.getItemMeta();
         for (String s : areaList) {
             String[] areaParts = s.split(",");
             if (playerAreas.contains(areaParts[0].trim())) {
                 areaMeta.setDisplayName(areaParts[1].trim());
-                if(selectedArea.equals(areaParts[0].trim())){
+                if (selectedArea.equals(areaParts[0].trim())) {
                     areaItem.setType(Material.MAP);
-                }else{
+                } else {
                     areaItem.setType(Material.PAPER);
                 }
                 areaItem.setItemMeta(areaMeta);
@@ -90,6 +121,29 @@ public class OpenMenuCommand implements TabExecutor {
                 }
             }
         }
+
+
+        //Percent Meter
+        int percent = 0;
+        ItemStack percentMeter = new ItemStack(Material.CLOCK);
+        ItemMeta meterMeta = percentMeter.getItemMeta();
+        if (totalItems > 0) {
+            percent = playerCollectedItems.size() / totalItems;
+            meterMeta.setDisplayName(ChatColor.RED + "" + percent + " %");
+            if (percent > 25 && percent < 50) {
+                meterMeta.setDisplayName(ChatColor.GOLD + "" + percent + " %");
+            } else if (percent > 50 && percent < 75) {
+                meterMeta.setDisplayName(ChatColor.YELLOW + "" + percent + " %");
+            } else if (percent > 75) {
+                meterMeta.setDisplayName(ChatColor.GREEN + "" + percent + " %");
+            }
+
+        } else {
+            meterMeta.setDisplayName(ChatColor.RED + "0 %");
+        }
+        percentMeter.setItemMeta(meterMeta);
+        gui.setItem(9, percentMeter);
+
 
         //Cat Items
         ItemStack vegItem = new ItemStack(Material.EMERALD);
@@ -148,32 +202,232 @@ public class OpenMenuCommand implements TabExecutor {
         strangeMeta.setHideTooltip(false);
         strangeItem.setItemMeta(strangeMeta);
 
-        if(page == 1){
+        ItemStack infill = new ItemStack(Material.LIGHT_GRAY_STAINED_GLASS_PANE);
+        ItemMeta infillMeta = infill.getItemMeta();
+        Objects.requireNonNull(infillMeta).setDisplayName(" ");
+        infillMeta.setHideTooltip(true);
+        infill.setItemMeta(infillMeta);
+
+        if (page == 1) {
             gui.setItem(10, vegItem);
             gui.setItem(19, fruitItem);
             gui.setItem(28, flowerItem);
             gui.setItem(37, animalItem);
-        }else if(page == 2){
+        } else if (page == 2) {
             gui.setItem(10, bugItem);
             gui.setItem(19, natureItem);
             gui.setItem(28, partsItem);
             gui.setItem(37, strangeItem);
         }
 
+        //Items
+        ItemStack neededItem = new ItemStack(Material.BLACK_STAINED_GLASS_PANE);
+        ItemMeta neededMeta = neededItem.getItemMeta();
+        neededMeta.setHideTooltip(true);
+        neededItem.setItemMeta(neededMeta);
 
-        for (ItemStack itemStack : itemList) {
-            if (itemStack != null) {
+        ItemStack hasItem = new ItemStack(Material.BLUE_STAINED_GLASS_PANE);
+        ItemMeta hasMeta = hasItem.getItemMeta();
+
+        //TODO Add other groups.
+        //TODO Update so correct amount of needed squares are fill based off ow many item in group
+        int slotOffset = 0;
+
+        if (page == 1) {
+            if (!vegList.contains("None")) {
+                for (String s : vegList) {
+                    if (playerCollectedItems.contains(s)) {
+                        vegMeta.setDisplayName(ChatColor.AQUA + s);
+                        vegItem.setItemMeta(vegMeta);
+                        gui.setItem(11 + slotOffset, vegItem);
+                        slotOffset++;
+                    } else if (playerItemNames.contains(s)) {
+                        hasMeta.setDisplayName(ChatColor.GREEN + s);
+                        hasItem.setItemMeta(hasMeta);
+                        gui.setItem(11 + slotOffset, hasItem);
+                        slotOffset++;
+                    } else {
+                        gui.setItem(11 + slotOffset, neededItem);
+                        slotOffset++;
+                    }
+                }
+            } else {
+                for (int t = 0; t < 5; t++) {
+                    gui.setItem(20 + t, infill);
+                }
+            }
+            slotOffset = 0;
+            if (!fruitList.contains("None")) {
+                for (String s : fruitList) {
+                    if (playerCollectedItems.contains(s)) {
+                        fruitMeta.setDisplayName(ChatColor.AQUA + s);
+                        fruitItem.setItemMeta(fruitMeta);
+                        gui.setItem(20 + slotOffset, fruitItem);
+                        slotOffset++;
+                    } else if (playerItemNames.contains(s)) {
+                        hasMeta.setDisplayName(ChatColor.GREEN + s);
+                        hasItem.setItemMeta(hasMeta);
+                        gui.setItem(20 + slotOffset, hasItem);
+                        slotOffset++;
+                    } else {
+                        gui.setItem(20 + slotOffset, neededItem);
+                        slotOffset++;
+                    }
+                }
+            } else {
+                for (int t = 0; t < 5; t++) {
+                    gui.setItem(20 + t, infill);
+                }
+            }
+            slotOffset = 0;
+            if (!flowerList.contains("None")) {
+                for (String s : flowerList) {
+                    if (playerCollectedItems.contains(s)) {
+                        flowerMeta.setDisplayName(ChatColor.AQUA + s);
+                        flowerItem.setItemMeta(flowerMeta);
+                        gui.setItem(29 + slotOffset, flowerItem);
+                        slotOffset++;
+                    } else if (playerItemNames.contains(s)) {
+                        hasMeta.setDisplayName(ChatColor.GREEN + s);
+                        hasItem.setItemMeta(hasMeta);
+                        gui.setItem(29 + slotOffset, hasItem);
+                        slotOffset++;
+                    } else {
+                        gui.setItem(29 + slotOffset, neededItem);
+                        slotOffset++;
+                    }
+                }
+            } else {
+                for (int t = 0; t < 5; t++) {
+                    gui.setItem(29 + t, infill);
+                }
+            }
+            slotOffset = 0;
+            if (!animalList.contains("None")) {
+                for (String s : animalList) {
+                    if (playerCollectedItems.contains(s)) {
+                        animalMeta.setDisplayName(ChatColor.AQUA + s);
+                        animalItem.setItemMeta(animalMeta);
+                        gui.setItem(38 + slotOffset, animalItem);
+                        slotOffset++;
+                    } else if (playerItemNames.contains(s)) {
+                        hasMeta.setDisplayName(ChatColor.GREEN + s);
+                        hasItem.setItemMeta(hasMeta);
+                        gui.setItem(38 + slotOffset, hasItem);
+                        slotOffset++;
+                    } else {
+                        gui.setItem(38 + slotOffset, neededItem);
+                        slotOffset++;
+                    }
+                }
+            } else {
+                for (int t = 0; t < 5; t++) {
+                    gui.setItem(38 + t, infill);
+                }
+            }
+        } else if (page == 2) {
+            if (!bugList.contains("None")) {
+                for (String s : bugList) {
+                    if (playerCollectedItems.contains(s)) {
+                        bugMeta.setDisplayName(ChatColor.AQUA + s);
+                        bugItem.setItemMeta(bugMeta);
+                        gui.setItem(11 + slotOffset, bugItem);
+                        slotOffset++;
+                    } else if (playerItemNames.contains(s)) {
+                        hasMeta.setDisplayName(ChatColor.GREEN + s);
+                        hasItem.setItemMeta(hasMeta);
+                        gui.setItem(11 + slotOffset, hasItem);
+                        slotOffset++;
+                    } else {
+                        gui.setItem(11 + slotOffset, neededItem);
+                        slotOffset++;
+                    }
+                }
+            } else {
+                for (int t = 0; t < 5; t++) {
+                    gui.setItem(20 + t, infill);
+                }
+            }
+            slotOffset = 0;
+            if (!natureList.contains("None")) {
+                for (String s : natureList) {
+                    if (playerCollectedItems.contains(s)) {
+                        natureMeta.setDisplayName(ChatColor.AQUA + s);
+                        natureItem.setItemMeta(natureMeta);
+                        gui.setItem(20 + slotOffset, natureItem);
+                        slotOffset++;
+                    } else if (playerItemNames.contains(s)) {
+                        hasMeta.setDisplayName(ChatColor.GREEN + s);
+                        hasItem.setItemMeta(hasMeta);
+                        gui.setItem(20 + slotOffset, hasItem);
+                        slotOffset++;
+                    } else {
+                        gui.setItem(20 + slotOffset, neededItem);
+                        slotOffset++;
+                    }
+                }
+            } else {
+                for (int t = 0; t < 5; t++) {
+                    gui.setItem(20 + t, infill);
+                }
+            }
+            slotOffset = 0;
+            if (!partsList.contains("None")) {
+                for (String s : partsList) {
+                    if (playerCollectedItems.contains(s)) {
+                        partsMeta.setDisplayName(ChatColor.AQUA + s);
+                        partsItem.setItemMeta(flowerMeta);
+                        gui.setItem(29 + slotOffset, partsItem);
+                        slotOffset++;
+                    } else if (playerItemNames.contains(s)) {
+                        hasMeta.setDisplayName(ChatColor.GREEN + s);
+                        hasItem.setItemMeta(hasMeta);
+                        gui.setItem(29 + slotOffset, hasItem);
+                        slotOffset++;
+                    } else {
+                        gui.setItem(29 + slotOffset, neededItem);
+                        slotOffset++;
+                    }
+                }
+            } else {
+                for (int t = 0; t < 5; t++) {
+                    gui.setItem(29 + t, infill);
+                }
+            }
+            slotOffset = 0;
+            if (!strangeList.contains("None")) {
+                for (String s : strangeList) {
+                    if (playerCollectedItems.contains(s)) {
+                        strangeMeta.setDisplayName(ChatColor.AQUA + s);
+                        strangeItem.setItemMeta(strangeMeta);
+                        gui.setItem(38 + slotOffset, strangeItem);
+                        slotOffset++;
+                    } else if (playerItemNames.contains(s)) {
+                        hasMeta.setDisplayName(ChatColor.GREEN + s);
+                        hasItem.setItemMeta(hasMeta);
+                        gui.setItem(38 + slotOffset, hasItem);
+                        slotOffset++;
+                    } else {
+                        gui.setItem(38 + slotOffset, neededItem);
+                        slotOffset++;
+                    }
+                }
+            } else {
+                for (int t = 0; t < 5; t++) {
+                    gui.setItem(38 + t, infill);
+                }
             }
         }
+
         p.openInventory(gui);
     }
-
 
 
     @Override
     public boolean onCommand(CommandSender sender, Command command, String s, String[] args) {
 
         if (sender instanceof Player p) {
+            String selectedArea = "colony9";
             int rows = 6;
             int cols = 9;
             int invSize = (rows * cols);

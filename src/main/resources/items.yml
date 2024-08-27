@@ -1,29 +1,78 @@
+other:
+  count: 7
+  veg:
+    - None
+  fruit:
+    - None
+  flower:
+    - None
+  bug:
+    - Minute Mantis
+    - Love Beetle
+  nature:
+    - None
+  parts:
+    - Golden Cog
+    - Angel Engine Y
+    - Thunder Compass
+  strange:
+    - Coin of Fortune
+    - Love Source
 colony9:
-  - veg:
-      - Sweet Wasabi
-      - Cool Potato
-      - Red Lettuce
-      - Chewy Radish
-  - fruit:
-      - Dance Apple
-      - Black Kiwi
-  - flower:
-      - Strong Dandelion
-      - Moon Flower
-      - Dawn Hydrangea
-  - animal:
-      - None
-  - bug:
-      - Prairie Dragonfly
-      - Giant Hornet
-      - White Beetle
-      - Sorrow Beetle
-  - nature:
-      - None
-  - parts:
-      - Blue Chain
-      - Rabbit Diode
-  - strange:
-      - Plate Snow
-      - Rainbow Zirconia
-
+  count: 17
+  veg:
+    - Sweet Wasabi
+    - Cool Potato
+    - Red Lettuce
+    - Chewy Radish
+  fruit:
+    - Dance Apple
+    - Black Kiwi
+  flower:
+    - Strong Dandelion
+    - Moon Flower
+    - Dawn Hydrangea
+  animal:
+    - None
+  bug:
+    - Prairie Dragonfly
+    - Giant Hornet
+    - White Beetle
+    - Sorrow Beetle
+  nature:
+    - None
+  parts:
+    - Blue Chain
+    - Rabbit Diode
+  strange:
+    - Plate Snow
+    - Rainbow Zirconia
+tephraCave:
+  count: 17
+  veg:
+    - None
+  fruit:
+    - Clear Almond
+    - Bright Fig
+    - Dark Grape
+  flower:
+    - Insanity Mint
+    - Night Tulip
+  animal:
+    - Shin Newt
+    - Cave Rat
+    - Shin Gecko
+    - Happy Rabbit
+  bug:
+    - Brown Butterfly
+    - Gold Caterpillar
+    - Rumble Stonefly
+  nature:
+    - Kneecap Rock
+    - Confusion Ivy
+    - Clarity Moss
+  parts:
+    - None
+  strange:
+    - Leaf Mystery
+    - Steel Silk

@@ -18,3 +18,17 @@ tephraCave:
   bug: Slow Resist II
   nature: Attack Plus II
   strange: Attack Stability II
+  all: Warrior Cusses
+bionisLeg:
+  veg: Pelt Top
+  fruit: Paralysis II
+  bug: Grand Gauntlets
+  nature: Bind Resist II
+  parts: Strength Up II
+  strange: Pelt Bottoms
+  all: White Cluster
+colony6:
+  flower: Auto-Atk Stealth II
+  animal: Paralysis Resist II
+  strange: Ether Def up II
+  all: Warrior Plate

@@ -76,3 +76,46 @@ tephraCave:
   strange:
     - Leaf Mystery
     - Steel Silk
+bionisLeg:
+  count: 23
+  veg:
+    - Hot Taro
+    - Juicy Broccoli
+    - Spicy Cabbage
+    - Hard Lotus
+  fruit:
+    - Sour Gooseberry
+    - Red Durian
+    - Walnut Grape
+    - Humming Plum
+  bug:
+    - White Ladybird
+    - Hill Firefly
+    - Moth Crawler
+    - Queen Locust
+    - Fire Tarantula
+  nature:
+    - Mat Ice
+    - Bluesky Bark
+    - Pione Stone
+  parts:
+    - Rusty Bolt
+    - Winding Gear
+  strange:
+    - Gold Dust Illusion
+    - Devious Gravity
+    - White Songbird
+    - Death Bangle
+colony6:
+  count: 8
+  flower:
+    - Cute Orchid
+    - Sirius Anemone
+    - Spirit Clematis
+  animal:
+    - Pyro Lizard
+    - Amblygon Turtle
+    - Dobercorgi
+  strange:
+    - Verdant Eternity
+    - White Night Rod

@@ -30,8 +30,6 @@ public class OpenMenuCommand implements TabExecutor {
     //TODO When menu is opened default to Colony 9
     //TODO When player first goes to new area, add to unlocked area list.
 
-    //TODO Need to rework so it use the same command loop instead of creating a new one.
-    //TODO Get click event to update variables and call update function.
 
 
     public OpenMenuCommand(Collectopaedia collectopaedia) {
@@ -39,9 +37,10 @@ public class OpenMenuCommand implements TabExecutor {
     }
 
 
-    public void menuClick(Player p, ItemStack item) {
+    public void menuClick(Player p, ItemStack item, int invSlot) {
         String itemName = item.getItemMeta().getDisplayName().trim();
         Inventory inv = p.getOpenInventory().getTopInventory();
+        List<String> areaList = collectopaedia.areasData.getStringList("areas");
         if (itemName.contains("Back")) {
             p.closeInventory();
         } else if (itemName.contains("Next")) {
@@ -51,8 +50,9 @@ public class OpenMenuCommand implements TabExecutor {
                 page = 2;
             }
             updatePlayerInv(p, inv);
+        } else if (!areaList.contains(itemName) && (item.getData().getItemType().equals(Material.BLUE_STAINED_GLASS_PANE))) {
+            submitItem(p, item, invSlot);
         } else {
-            List<String> areaList = collectopaedia.areasData.getStringList("areas");
             for (String s : areaList) {
                 String[] areaParts = s.split(",");
                 if (itemName.contains(areaParts[1].trim())) {
@@ -61,7 +61,25 @@ public class OpenMenuCommand implements TabExecutor {
                 }
             }
         }
+    }
 
+    private void submitItem(Player p, ItemStack item, int invSlot) {
+        FileConfiguration playerFile = collectopaedia.loadPlayerData(p);
+        String selectedArea = playerFile.getString(p.getUniqueId() + ".selectedArea");
+        PlayerInventory playerInv = p.getInventory();
+        List<String> playerCollectedItems = playerFile.getStringList("depositedItems." + selectedArea);
+        ItemStack itemSlot = playerInv.getItem(invSlot);
+
+        ItemStack[] playerItems = playerInv.getContents();
+        List<String> playerItemNames = new ArrayList<>();
+        for (ItemStack playerItem : playerItems) {
+            if (playerItem != null) {
+                String itemName = playerItem.getItemMeta().getDisplayName();
+                if (itemName.contains(ChatColor.AQUA + "")) {
+                    playerItemNames.add(itemName.replace(ChatColor.AQUA + "", ""));
+                }
+            }
+        }
 
     }
 
@@ -69,7 +87,6 @@ public class OpenMenuCommand implements TabExecutor {
         FileConfiguration playerFile = collectopaedia.loadPlayerData(p);
         String selectedArea = playerFile.getString(p.getUniqueId() + ".selectedArea");
         PlayerInventory playerInv = p.getInventory();
-
 
         List<String> playerAreas = playerFile.getStringList("unlockedArea");
         List<String> playerCollectedItems = playerFile.getStringList("depositedItems." + selectedArea);

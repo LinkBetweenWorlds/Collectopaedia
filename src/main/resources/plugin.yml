@@ -6,8 +6,8 @@ author: Blink9085
 description: Collectopaedia plugin for Xenocraft
 
 commands:
-  open:
-    description: Opens Collectopaedia
+  collectopaedia:
+    description: Opens Collectopaedia Menu
     usage: /<command>
   reloadconfig:
     description: Reloads config files

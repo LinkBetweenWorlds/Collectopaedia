@@ -9,18 +9,18 @@ import org.xenocraft.collectopaedia.commands.OpenMenuCommand;
 
 public class PlayerInvClickEvent implements Listener {
 
-    private final Collectopaedia collectopaedia;
+    private final OpenMenuCommand openMenuCommand; // Reuse this object instead of creating it every time
 
     public PlayerInvClickEvent(Collectopaedia collectopaedia) {
-        this.collectopaedia = collectopaedia;
+        this.openMenuCommand = new OpenMenuCommand(collectopaedia); // Instantiate only once
     }
+
     @EventHandler
-    public void InvClickEvent(InventoryClickEvent event){
-        if(event.getCurrentItem() != null){
+    public void InvClickEvent(InventoryClickEvent event) {
+        if (event.getCurrentItem() != null) {
             Player p = (Player) event.getWhoClicked();
-            if(event.getView().getTitle().contains("Collectopaedia")){
+            if (event.getView().getTitle().contains("Collectopaedia")) {
                 event.setCancelled(true);
-                OpenMenuCommand openMenuCommand = new OpenMenuCommand(collectopaedia);
                 openMenuCommand.menuClick(p, event.getCurrentItem(), event.getSlot());
             }
         }

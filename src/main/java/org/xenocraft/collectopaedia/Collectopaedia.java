@@ -1,6 +1,7 @@
 package org.xenocraft.collectopaedia;
 
 
+import org.bukkit.Bukkit;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
@@ -53,23 +54,25 @@ public final class Collectopaedia extends JavaPlugin implements Listener {
 
     // Method to create a new YAML file
     public void createPlayerFile(Player p) {
-        String uuid = p.getUniqueId().toString();
-        File newFile = new File(getDataFolder() + "/playerData", uuid + ".yml");
-        if (!newFile.exists()) {
-            try {
-                if (!newFile.createNewFile() && newFile.exists()) {
-                    FileConfiguration playerFile = YamlConfiguration.loadConfiguration(newFile);
-                    playerFile.set(uuid + ".name", p.getName());
-                    playerFile.set(uuid + ".selectedArea", "colony9");
-                    List<String> list = List.of("other", "colony9");
-                    playerFile.set("unlockedArea", list);
-                    playerFile.set("depositedItems", list);
-                    playerFile.save(new File(getDataFolder() + "/playerData", uuid + ".yml"));
+        Bukkit.getScheduler().runTaskAsynchronously(this, () -> {
+            String uuid = p.getUniqueId().toString();
+            File newFile = new File(getDataFolder() + "/playerData", uuid + ".yml");
+            if (!newFile.exists()) {
+                try {
+                    if (!newFile.createNewFile() && newFile.exists()) {
+                        FileConfiguration playerFile = YamlConfiguration.loadConfiguration(newFile);
+                        playerFile.set(uuid + ".name", p.getName());
+                        playerFile.set(uuid + ".selectedArea", "colony9");
+                        List<String> list = List.of("other", "colony9");
+                        playerFile.set("unlockedArea", list);
+                        playerFile.set("depositedItems", list);
+                        playerFile.save(new File(getDataFolder() + "/playerData", uuid + ".yml"));
+                    }
+                } catch (IOException e) {
+                    getLogger().log(Level.WARNING, e.toString());
                 }
-            } catch (IOException e) {
-                getLogger().log(Level.WARNING, e.toString());
             }
-        }
+        });
     }
 
     public void updatePlayerFile(Player p) {
@@ -85,13 +88,13 @@ public final class Collectopaedia extends JavaPlugin implements Listener {
         savePlayerFile(playerFile, p);
     }
 
-    public void updatePlayerArea(Player p, String area) {
+    public synchronized void updatePlayerArea(Player p, String area) {
         FileConfiguration playerFile = loadPlayerData(p);
         playerFile.set(p.getUniqueId() + ".selectedArea", area);
         savePlayerFile(playerFile, p);
     }
 
-    public void savePlayerFile(FileConfiguration file, Player p) {
+    public synchronized void savePlayerFile(FileConfiguration file, Player p) {
         try {
             file.save(new File(getDataFolder() + "/playerData", p.getUniqueId() + ".yml"));
         } catch (IOException e) {
@@ -123,7 +126,7 @@ public final class Collectopaedia extends JavaPlugin implements Listener {
         return file.exists();
     }
 
-    private void createDataFile() {
+    private synchronized void createDataFile() {
         File itemsFile = new File(getDataFolder(), "items.yml");
         if (!itemsFile.exists()) {
             if (itemsFile.getParentFile().mkdirs()) {

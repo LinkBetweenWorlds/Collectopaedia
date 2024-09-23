@@ -43,7 +43,6 @@ public final class Collectopaedia extends JavaPlugin implements Listener {
         }
         //Means the plugin works somehow.
         getLogger().log(Level.INFO, "This message means that the Collectopaedia Plugin works somehow???\nHow? I have no clue. -Blink");
-
     }
 
     @Override
@@ -76,72 +75,93 @@ public final class Collectopaedia extends JavaPlugin implements Listener {
     }
 
     public void updatePlayerFile(Player p) {
-        FileConfiguration playerFile = loadPlayerData(p);
-        List<String> areas = areasData.getStringList("areas");
-        for (String a : areas) {
-            String[] areaParts = a.split(",");
-            if (!playerFile.contains("depositedItems." + areaParts[0].trim())) {
-                List<String> items = List.of();
-                playerFile.set("depositedItems." + areaParts[0].trim(), items);
+        Bukkit.getScheduler().runTaskAsynchronously(this, () -> {
+            FileConfiguration playerFile = loadPlayerData(p);
+            List<String> areas = areasData.getStringList("areas");
+            for (String a : areas) {
+                String[] areaParts = a.split(",");
+                if (!playerFile.contains("depositedItems." + areaParts[0].trim())) {
+                    List<String> items = List.of();
+                    playerFile.set("depositedItems." + areaParts[0].trim(), items);
+                }
             }
-        }
-        savePlayerFile(playerFile, p);
+            savePlayerFile(playerFile, p);
+        });
     }
 
-    public synchronized void updatePlayerArea(Player p, String area) {
-        FileConfiguration playerFile = loadPlayerData(p);
-        playerFile.set(p.getUniqueId() + ".selectedArea", area);
-        savePlayerFile(playerFile, p);
+    public void updatePlayerItems(Player p, FileConfiguration playerFile, String item){
+        Bukkit.getScheduler().runTaskAsynchronously(this, () -> {
+            String selectedArea = playerFile.getString(p.getUniqueId() + ".selectedArea");
+            List<String> areaItems = playerFile.getStringList("depositedItems." + selectedArea);
+            areaItems.add(item);
+            playerFile.set("depositedItems." + selectedArea, areaItems);
+            savePlayerFile(playerFile, p);
+        });
     }
 
-    public synchronized void savePlayerFile(FileConfiguration file, Player p) {
-        try {
-            file.save(new File(getDataFolder() + "/playerData", p.getUniqueId() + ".yml"));
-        } catch (IOException e) {
-            getLogger().log(Level.WARNING, e.toString());
-        }
+    public void updatePlayerArea(Player p, String area) {
+        Bukkit.getScheduler().runTaskAsynchronously(this, () -> {
+            FileConfiguration playerFile = loadPlayerData(p);
+            playerFile.set(p.getUniqueId() + ".selectedArea", area);
+            savePlayerFile(playerFile, p);
+        });
+    }
+
+    public void savePlayerFile(FileConfiguration file, Player p) {
+        Bukkit.getScheduler().runTaskAsynchronously(this, () -> {
+            try {
+                file.save(new File(getDataFolder() + "/playerData", p.getUniqueId() + ".yml"));
+            } catch (IOException e) {
+                getLogger().log(Level.WARNING, e.toString());
+            }
+        });
     }
 
     public FileConfiguration loadPlayerData(Player p) {
         File file = new File(getDataFolder() + "/playerData", p.getUniqueId() + ".yml");
-        if (!file.exists()) {
-            createPlayerFile(p);
-        }
+        Bukkit.getScheduler().runTaskAsynchronously(this, () -> {
+            if (!file.exists()) {
+                createPlayerFile(p);
+            }
+        });
         return YamlConfiguration.loadConfiguration(file);
     }
 
     public void addArea(Player p, String areaName) {
-        FileConfiguration playerFile = loadPlayerData(p);
-        List<String> playerAreaList = playerFile.getStringList("unlockedArea");
-        if (!playerAreaList.contains(areaName)) {
-            playerAreaList.add(areaName);
-            playerFile.set("unlockedArea", playerAreaList);
-            savePlayerFile(playerFile, p);
-        }
+        Bukkit.getScheduler().runTaskAsynchronously(this, () -> {
+            FileConfiguration playerFile = loadPlayerData(p);
+            List<String> playerAreaList = playerFile.getStringList("unlockedArea");
+            if (!playerAreaList.contains(areaName)) {
+                playerAreaList.add(areaName);
+                playerFile.set("unlockedArea", playerAreaList);
+                savePlayerFile(playerFile, p);
+            }
+        });
     }
 
     // Method to check if a YAML file exists
     public boolean playerFileExists(Player p) {
-        File file = new File(getDataFolder() + "/playerData", p.getUniqueId() + ".yml");
-        return file.exists();
+        return new File(getDataFolder() + "/playerData", p.getUniqueId() + ".yml").exists();
     }
 
     private synchronized void createDataFile() {
-        File itemsFile = new File(getDataFolder(), "items.yml");
-        if (!itemsFile.exists()) {
-            if (itemsFile.getParentFile().mkdirs()) {
-                saveResource("items.yml", false);
-            }
+        Bukkit.getScheduler().runTaskAsynchronously(this, () -> {
+            File itemsFile = new File(getDataFolder(), "items.yml");
+            if (!itemsFile.exists()) {
+                if (itemsFile.getParentFile().mkdirs()) {
+                    saveResource("items.yml", false);
+                }
 
-        }
-        File areasFile = new File(getDataFolder(), "areas.yml");
-        if (!areasFile.exists()) {
-            if (areasFile.getParentFile().mkdirs()) {
-                saveResource("areas.yml", false);
             }
-        }
-        itemsData = YamlConfiguration.loadConfiguration(itemsFile);
-        areasData = YamlConfiguration.loadConfiguration(areasFile);
+            File areasFile = new File(getDataFolder(), "areas.yml");
+            if (!areasFile.exists()) {
+                if (areasFile.getParentFile().mkdirs()) {
+                    saveResource("areas.yml", false);
+                }
+            }
+            itemsData = YamlConfiguration.loadConfiguration(itemsFile);
+            areasData = YamlConfiguration.loadConfiguration(areasFile);
+        });
     }
 
     @Override

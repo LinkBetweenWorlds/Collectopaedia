@@ -23,17 +23,31 @@ public class OpenMenuCommand implements TabExecutor {
     private final Collectopaedia collectopaedia;
     private final ConcurrentHashMap<UUID, FileConfiguration> playerDataCache = new ConcurrentHashMap<>();
 
-    //TODO Check player items, if they match give option to add to Collectopaedia
-    //TODO Save file content: Player Name, unlocked area, deposited items in each area.
-    //TODO Save the player current Collectopaedia to YAML, under each area.
-
-
     public OpenMenuCommand(Collectopaedia collectopaedia) {
         this.collectopaedia = collectopaedia;
     }
 
+    private static ItemStack getPercentMeter(int totalItems, Set<String> playerCollectedItems) {
+        ItemStack percentMeter = new ItemStack(Material.CLOCK);
+        ItemMeta meterMeta = percentMeter.getItemMeta();
+        if (totalItems > 0) {
+            int percent = playerCollectedItems.size() / totalItems;
+            meterMeta.setDisplayName(ChatColor.RED + "" + percent + " %");
+            if (percent > 25 && percent < 50) {
+                meterMeta.setDisplayName(ChatColor.GOLD + "" + percent + " %");
+            } else if (percent > 50 && percent < 75) {
+                meterMeta.setDisplayName(ChatColor.YELLOW + "" + percent + " %");
+            } else if (percent > 75) {
+                meterMeta.setDisplayName(ChatColor.GREEN + "" + percent + " %");
+            }
+        } else {
+            meterMeta.setDisplayName(ChatColor.RED + "0 %");
+        }
+        percentMeter.setItemMeta(meterMeta);
+        return percentMeter;
+    }
 
-    public void menuClick(Player p, ItemStack item, int invSlot) {
+    public void menuClick(Player p, ItemStack item) {
         String itemName = item.getItemMeta().getDisplayName().trim();
         Material itemType = item.getType();
         Inventory inv = p.getOpenInventory().getTopInventory();
@@ -44,9 +58,8 @@ public class OpenMenuCommand implements TabExecutor {
             page = (page == 2) ? 1 : 2;
             updatePlayerInv(p, inv);
         } else if (!areaList.contains(itemName) && (itemType == Material.BLUE_STAINED_GLASS_PANE)) {
-            submitItem(p, item, invSlot);
+            submitItem(p, item);
         } else {
-            // Preprocess areaParts only once before the loop
             areaList.forEach(s -> {
                 String[] areaParts = s.split(",");
                 String areaId = areaParts[0].trim();
@@ -60,28 +73,43 @@ public class OpenMenuCommand implements TabExecutor {
         }
     }
 
-    private void submitItem(Player p, ItemStack item, int invSlot) {
+    private void submitItem(Player p, ItemStack item) {
         Bukkit.getScheduler().runTaskAsynchronously(collectopaedia, () -> {
-            FileConfiguration playerFile = collectopaedia.loadPlayerData(p);
-            String selectedArea = playerFile.getString(p.getUniqueId() + ".selectedArea");
+            FileConfiguration playerFile = getPlayerData(p);
             PlayerInventory playerInv = p.getInventory();
-            List<String> playerCollectedItems = playerFile.getStringList("depositedItems." + selectedArea);
-            ItemStack itemSlot = playerInv.getItem(invSlot);
+            String submitItemName = (item.getItemMeta().getDisplayName()).replace(ChatColor.AQUA + "", "");
+            Map<Integer, String> playerItems = getPlayerItemNames(playerInv);
 
-            Map<Integer, ItemStack> playerItems = getPlayerItems(playerInv);
-
-            // Handle the collected items and inventory processing here
-            ItemStack playerItem = playerItems.get(invSlot);
-            if (!playerCollectedItems.contains(playerItem.getItemMeta().getDisplayName())) {
-
+            //Go thru player's inv to find item and remove it.
+            //Update player's file with submitted item.
+            //Update gui
+            int[] i = {0};
+            for (i[0] = 0; i[0] < playerInv.getSize(); i[0]++) {
+                if (playerItems.containsKey(i[0])) {
+                    if (playerItems.get(i[0]).equals(submitItemName)) {
+                        collectopaedia.updatePlayerItems(p, playerFile, submitItemName);
+                        Bukkit.getScheduler().runTask(collectopaedia, () -> {
+                            ItemStack itemRemove = playerInv.getItem(i[0]);
+                            int[] itemAmount = {itemRemove.getAmount()};
+                            if (itemAmount[0] > 1) {
+                                itemRemove.setAmount(itemAmount[0] - 1);
+                            } else {
+                                playerInv.setItem(i[0], null);
+                            }
+                            updatePlayerInv(p, playerInv);
+                        });
+                        break;
+                    }
+                }
             }
+
         });
+
 
     }
 
     private FileConfiguration getPlayerData(Player p) {
-        UUID playerId = p.getUniqueId();
-        return playerDataCache.computeIfAbsent(playerId, _ -> collectopaedia.loadPlayerData(p));
+        return playerDataCache.computeIfAbsent(p.getUniqueId(), _ -> collectopaedia.loadPlayerData(p));
     }
 
     private void updatePlayerInv(Player p, Inventory gui) {
@@ -97,10 +125,10 @@ public class OpenMenuCommand implements TabExecutor {
             List<String> natureList = collectopaedia.itemsData.getStringList(selectedArea + ".nature");
             List<String> partsList = collectopaedia.itemsData.getStringList(selectedArea + ".parts");
             List<String> strangeList = collectopaedia.itemsData.getStringList(selectedArea + ".strange");
-
-
             PlayerInventory playerInv = p.getInventory();
-            Set<String> playerItemNames = new HashSet<>(getPlayerItemNames(playerInv));
+
+            Map<Integer, String> playerItemNamesMap = getPlayerItemNames(playerInv);
+            List<String> playerItemNames = new ArrayList<>(playerItemNamesMap.values());
 
             List<String> playerAreas = playerFile.getStringList("unlockedArea");
             Set<String> playerCollectedItems = new HashSet<>(playerFile.getStringList("depositedItems." + selectedArea));
@@ -134,24 +162,7 @@ public class OpenMenuCommand implements TabExecutor {
 
 
             //Percent Meter
-            int percent;
-            ItemStack percentMeter = new ItemStack(Material.CLOCK);
-            ItemMeta meterMeta = percentMeter.getItemMeta();
-            if (totalItems > 0) {
-                percent = playerCollectedItems.size() / totalItems;
-                meterMeta.setDisplayName(ChatColor.RED + "" + percent + " %");
-                if (percent > 25 && percent < 50) {
-                    meterMeta.setDisplayName(ChatColor.GOLD + "" + percent + " %");
-                } else if (percent > 50 && percent < 75) {
-                    meterMeta.setDisplayName(ChatColor.YELLOW + "" + percent + " %");
-                } else if (percent > 75) {
-                    meterMeta.setDisplayName(ChatColor.GREEN + "" + percent + " %");
-                }
-
-            } else {
-                meterMeta.setDisplayName(ChatColor.RED + "0 %");
-            }
-            percentMeter.setItemMeta(meterMeta);
+            ItemStack percentMeter = getPercentMeter(totalItems, playerCollectedItems);
             gui.setItem(9, percentMeter);
 
             //Cat Items
@@ -425,6 +436,7 @@ public class OpenMenuCommand implements TabExecutor {
                     }
                 }
             }
+
             Bukkit.getScheduler().runTask(collectopaedia, () -> {
                 Inventory currentInv = p.getOpenInventory().getTopInventory();
                 if (!gui.equals(currentInv)) {
@@ -434,8 +446,8 @@ public class OpenMenuCommand implements TabExecutor {
         });
     }
 
-    private Map<Integer, ItemStack> getPlayerItems(PlayerInventory playerInv) {
-        Map<Integer, ItemStack> playerItems = new HashMap<>();
+    private Map<Integer, String> getPlayerItemNames(PlayerInventory playerInv) {
+        Map<Integer, String> playerItemNames = new HashMap<>();
         String aquaColorCode = ChatColor.AQUA + "";
         for (int i = 0; i < playerInv.getSize(); i++) {
             ItemStack item = playerInv.getItem(i);
@@ -444,25 +456,7 @@ public class OpenMenuCommand implements TabExecutor {
                 if (itemMeta != null) {
                     String itemName = itemMeta.getDisplayName();
                     if (itemName.contains(aquaColorCode)) {
-                        playerItems.put(i, item);
-                    }
-                }
-            }
-        }
-        return playerItems;
-    }
-
-    private List<String> getPlayerItemNames(PlayerInventory playerInv) {
-        ItemStack[] playerItems = playerInv.getContents();
-        List<String> playerItemNames = new ArrayList<>();
-        String aquaColorCode = ChatColor.AQUA + "";
-        for (ItemStack item : playerItems) {
-            if (item != null) {
-                ItemMeta itemMeta = item.getItemMeta();
-                if (itemMeta != null) {
-                    String itemName = itemMeta.getDisplayName();
-                    if (itemName.contains(aquaColorCode)) {
-                        playerItemNames.add(itemName.replace(ChatColor.AQUA + "", ""));
+                        playerItemNames.put(i, itemName.replace(ChatColor.AQUA + "", ""));
                     }
                 }
             }

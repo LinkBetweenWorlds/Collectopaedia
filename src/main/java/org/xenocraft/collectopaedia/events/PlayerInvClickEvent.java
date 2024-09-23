@@ -21,7 +21,7 @@ public class PlayerInvClickEvent implements Listener {
             Player p = (Player) event.getWhoClicked();
             if (event.getView().getTitle().contains("Collectopaedia")) {
                 event.setCancelled(true);
-                openMenuCommand.menuClick(p, event.getCurrentItem(), event.getSlot());
+                openMenuCommand.menuClick(p, event.getCurrentItem());
             }
         }
     }

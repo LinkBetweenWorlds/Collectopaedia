@@ -77,39 +77,64 @@ public class OpenMenuCommand implements TabExecutor {
         Bukkit.getScheduler().runTaskAsynchronously(collectopaedia, () -> {
             FileConfiguration playerFile = getPlayerData(p);
             PlayerInventory playerInv = p.getInventory();
-            String submitItemName = (item.getItemMeta().getDisplayName()).replace(ChatColor.AQUA + "", "");
+            String submitItemName = item.getItemMeta().getDisplayName().replace(ChatColor.AQUA + "", "");
             Map<Integer, String> playerItems = getPlayerItemNames(playerInv);
 
-            //Go thru player's inv to find item and remove it.
-            //Update player's file with submitted item.
-            //Update gui
-            int[] i = {0};
-            for (i[0] = 0; i[0] < playerInv.getSize(); i[0]++) {
-                if (playerItems.containsKey(i[0])) {
-                    if (playerItems.get(i[0]).equals(submitItemName)) {
-                        collectopaedia.updatePlayerItems(p, playerFile, submitItemName);
-                        Bukkit.getScheduler().runTask(collectopaedia, () -> {
-                            ItemStack itemRemove = playerInv.getItem(i[0]);
-                            int[] itemAmount = {itemRemove.getAmount()};
-                            if (itemAmount[0] > 1) {
-                                itemRemove.setAmount(itemAmount[0] - 1);
+            // Go through player's inventory to find and remove the item
+            for (int i = 0; i < playerInv.getSize(); i++) {
+                if (submitItemName.equals(playerItems.get(i))) {
+                    final int index = i; // Capture the value of `i` into a final variable
+                    collectopaedia.updatePlayerItems(p, playerFile, submitItemName);
+
+                    Bukkit.getScheduler().runTask(collectopaedia, () -> {
+                        ItemStack itemRemove = playerInv.getItem(index); // Use captured `index`
+                        if (itemRemove != null) {
+                            int amount = itemRemove.getAmount();
+                            if (amount > 1) {
+                                itemRemove.setAmount(amount - 1);
                             } else {
-                                playerInv.setItem(i[0], null);
+                                playerInv.setItem(index, null); // Remove the item if it's the last one
                             }
-                            updatePlayerInv(p, playerInv);
-                        });
-                        break;
-                    }
+                            // Check if player completed collectopaedia and update inventory
+                            if (!checkCollectopaedia(p)) {
+                                updatePlayerInv(p, playerInv);
+                            }
+                        }
+                    });
+                    break;  // Item found and processed, exit loop
                 }
             }
-
         });
-
-
     }
+
 
     private FileConfiguration getPlayerData(Player p) {
         return playerDataCache.computeIfAbsent(p.getUniqueId(), _ -> collectopaedia.loadPlayerData(p));
+    }
+
+    private boolean checkCollectopaedia(Player p) {
+        Bukkit.getScheduler().runTaskAsynchronously(collectopaedia, () -> {
+            FileConfiguration playerFile = getPlayerData(p);
+            String selectedArea = playerFile.getString(p.getUniqueId() + ".selectedArea");
+            List<String> playerCollectedItems = playerFile.getStringList("depositedItems." + selectedArea);
+            HashMap<Integer, List<String>> items = new HashMap<>();
+            items.put(1, collectopaedia.itemsData.getStringList(selectedArea + ".veg"));
+            items.put(2, collectopaedia.itemsData.getStringList(selectedArea + ".fruit"));
+            items.put(3, collectopaedia.itemsData.getStringList(selectedArea + ".flower"));
+            items.put(4, collectopaedia.itemsData.getStringList(selectedArea + ".animal"));
+            items.put(5, collectopaedia.itemsData.getStringList(selectedArea + ".bug"));
+            items.put(6, collectopaedia.itemsData.getStringList(selectedArea + ".nature"));
+            items.put(7, collectopaedia.itemsData.getStringList(selectedArea + ".parts"));
+            items.put(8, collectopaedia.itemsData.getStringList(selectedArea + ".strange"));
+
+            for (int i = 0; i < 8; i++) {
+                List<String> areaItems = items.get(i);
+                if (playerCollectedItems.containsAll(areaItems)) {
+                    //Do fancy animations.
+                }
+            }
+        });
+        return false;
     }
 
     private void updatePlayerInv(Player p, Inventory gui) {

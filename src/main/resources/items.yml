@@ -6,6 +6,8 @@ other:
     - None
   flower:
     - None
+  animal:
+    - None
   bug:
     - Minute Mantis
     - Love Beetle
@@ -88,12 +90,16 @@ bionisLeg:
     - Red Durian
     - Walnut Grape
     - Humming Plum
+  flower:
+    - None
   bug:
     - White Ladybird
     - Hill Firefly
     - Moth Crawler
     - Queen Locust
     - Fire Tarantula
+  animal:
+    - None
   nature:
     - Mat Ice
     - Bluesky Bark
@@ -108,6 +114,10 @@ bionisLeg:
     - Death Bangle
 colony6:
   count: 8
+  veg:
+    - None
+  fruit:
+    - None
   flower:
     - Cute Orchid
     - Sirius Anemone
@@ -116,6 +126,12 @@ colony6:
     - Pyro Lizard
     - Amblygon Turtle
     - Dobercorgi
+  bug:
+    - None
+  nature:
+    - None
   strange:
     - Verdant Eternity
     - White Night Rod
+  parts:
+    - None

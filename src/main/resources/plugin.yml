@@ -1,7 +1,7 @@
 name: Collectopaedia
 version: '${project.version}'
 main: org.xenocraft.collectopaedia.Collectopaedia
-api-version: '1.21'
+api-version: '1.21.1'
 author: Blink9085
 description: Collectopaedia plugin for Xenocraft
 

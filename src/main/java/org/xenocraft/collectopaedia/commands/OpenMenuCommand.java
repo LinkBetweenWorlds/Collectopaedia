@@ -1,8 +1,6 @@
 package org.xenocraft.collectopaedia.commands;
 
-import org.bukkit.Bukkit;
-import org.bukkit.ChatColor;
-import org.bukkit.Material;
+import org.bukkit.*;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
 import org.bukkit.command.TabExecutor;
@@ -95,10 +93,7 @@ public class OpenMenuCommand implements TabExecutor {
                             } else {
                                 playerInv.setItem(index, null); // Remove the item if it's the last one
                             }
-                            // Check if player completed collectopaedia and update inventory
-                            if (!checkCollectopaedia(p)) {
-                                updatePlayerInv(p, playerInv);
-                            }
+                            checkCollectopaedia(p, playerInv);
                         }
                     });
                     break;  // Item found and processed, exit loop
@@ -112,29 +107,44 @@ public class OpenMenuCommand implements TabExecutor {
         return playerDataCache.computeIfAbsent(p.getUniqueId(), _ -> collectopaedia.loadPlayerData(p));
     }
 
-    private boolean checkCollectopaedia(Player p) {
+    private void checkCollectopaedia(Player p, Inventory playerInv) {
         Bukkit.getScheduler().runTaskAsynchronously(collectopaedia, () -> {
             FileConfiguration playerFile = getPlayerData(p);
             String selectedArea = playerFile.getString(p.getUniqueId() + ".selectedArea");
             List<String> playerCollectedItems = playerFile.getStringList("depositedItems." + selectedArea);
-            HashMap<Integer, List<String>> items = new HashMap<>();
-            items.put(1, collectopaedia.itemsData.getStringList(selectedArea + ".veg"));
-            items.put(2, collectopaedia.itemsData.getStringList(selectedArea + ".fruit"));
-            items.put(3, collectopaedia.itemsData.getStringList(selectedArea + ".flower"));
-            items.put(4, collectopaedia.itemsData.getStringList(selectedArea + ".animal"));
-            items.put(5, collectopaedia.itemsData.getStringList(selectedArea + ".bug"));
-            items.put(6, collectopaedia.itemsData.getStringList(selectedArea + ".nature"));
-            items.put(7, collectopaedia.itemsData.getStringList(selectedArea + ".parts"));
-            items.put(8, collectopaedia.itemsData.getStringList(selectedArea + ".strange"));
+            Set<String> playerCollectedItemsSet = new HashSet<>(playerCollectedItems);
+            Map<String, String> groupDisplayMap = Map.of("veg", "Veg", "fruit", "Fruit", "flower", "Flower", "animal", "Animal", "bug", "Bug", "nature", "Nature", "parts", "Parts", "strange", "Strange");
+            Map<String, List<String>> items = Map.of("veg", collectopaedia.itemsData.getStringList(selectedArea + ".veg"), "fruit", collectopaedia.itemsData.getStringList(selectedArea + ".fruit"), "flower", collectopaedia.itemsData.getStringList(selectedArea + ".flower"), "animal", collectopaedia.itemsData.getStringList(selectedArea + ".animal"), "bug", collectopaedia.itemsData.getStringList(selectedArea + ".bug"), "nature", collectopaedia.itemsData.getStringList(selectedArea + ".nature"), "parts", collectopaedia.itemsData.getStringList(selectedArea + ".parts"), "strange", collectopaedia.itemsData.getStringList(selectedArea + ".strange"));
 
-            for (int i = 0; i < 8; i++) {
-                List<String> areaItems = items.get(i);
-                if (playerCollectedItems.containsAll(areaItems)) {
-                    //Do fancy animations.
+            boolean completedSomething = false;
+
+            for (Map.Entry<String, List<String>> entry : items.entrySet()) {
+                String group = entry.getKey();
+                List<String> areaItems = entry.getValue();
+
+                // Skip if the group contains "None"
+                if (!areaItems.contains("None") && playerCollectedItemsSet.containsAll(areaItems)) {
+                    completedSomething = true;
+                    p.closeInventory();
+
+                    // Get the reward and display group name
+                    String reward = collectopaedia.rewardsData.getString(selectedArea + "." + group);
+                    String displayGroup = groupDisplayMap.getOrDefault(group, group);
+
+                    // Display completion message and play sound
+                    p.sendTitle(ChatColor.GREEN + "Completed: " + displayGroup, "Reward: " + reward, 6, 60, 12);
+                    p.playSound(p, Sound.UI_TOAST_CHALLENGE_COMPLETE, SoundCategory.MUSIC, 100, 1);
+
+                    //TODO Give the player the rewards for completing the row/page.
+
+                    break; // Exit loop after completing one group
                 }
             }
+            if (completedSomething) {
+                updatePlayerInv(p, playerInv);
+            }
         });
-        return false;
+
     }
 
     private void updatePlayerInv(Player p, Inventory gui) {

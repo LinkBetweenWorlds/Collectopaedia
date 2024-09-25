@@ -24,6 +24,7 @@ public final class Collectopaedia extends JavaPlugin implements Listener {
 
     public FileConfiguration areasData;
     public FileConfiguration itemsData;
+    public FileConfiguration rewardsData;
 
     @Override
     public void onEnable() {
@@ -159,8 +160,15 @@ public final class Collectopaedia extends JavaPlugin implements Listener {
                     saveResource("areas.yml", false);
                 }
             }
+            File rewardsFile = new File(getDataFolder(), "rewards.yml");
+            if (!rewardsFile.exists()) {
+                if (rewardsFile.getParentFile().mkdirs()) {
+                    saveResource("rewards.yml", false);
+                }
+            }
             itemsData = YamlConfiguration.loadConfiguration(itemsFile);
             areasData = YamlConfiguration.loadConfiguration(areasFile);
+            rewardsData = YamlConfiguration.loadConfiguration(rewardsFile);
         });
     }
 
@@ -169,8 +177,10 @@ public final class Collectopaedia extends JavaPlugin implements Listener {
         super.reloadConfig();
         File itemsFile = new File(getDataFolder(), "items.yml");
         File areasFile = new File(getDataFolder(), "areas.yml");
+        File rewardsFile = new File(getDataFolder(), "rewards.yml");
 
         itemsData = YamlConfiguration.loadConfiguration(itemsFile);
         areasData = YamlConfiguration.loadConfiguration(areasFile);
+        rewardsData = YamlConfiguration.loadConfiguration(rewardsFile);
     }
 }

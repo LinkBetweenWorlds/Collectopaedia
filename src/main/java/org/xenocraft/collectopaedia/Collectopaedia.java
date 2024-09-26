@@ -15,13 +15,16 @@ import org.xenocraft.collectopaedia.listener.PlayerJoinLeaveListener;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.logging.Level;
 
 
 public final class Collectopaedia extends JavaPlugin implements Listener {
 
+    public final Map<String, Map<String, List<String>>> areaDataCache = new HashMap<>();
     public FileConfiguration areasData;
     public FileConfiguration itemsData;
     public FileConfiguration rewardsData;
@@ -30,6 +33,7 @@ public final class Collectopaedia extends JavaPlugin implements Listener {
     public void onEnable() {
 
         createDataFile();
+        preloadCollectopaediaData();
 
         getServer().getPluginManager().registerEvents(this, this);
         getServer().getPluginManager().registerEvents(new PlayerInvClickEvent(this), this);
@@ -52,7 +56,7 @@ public final class Collectopaedia extends JavaPlugin implements Listener {
         // Plugin shutdown logic
     }
 
-    // Method to create a new YAML file
+    //Player file management
     public void createPlayerFile(Player p) {
         Bukkit.getScheduler().runTaskAsynchronously(this, () -> {
             String uuid = p.getUniqueId().toString();
@@ -90,7 +94,7 @@ public final class Collectopaedia extends JavaPlugin implements Listener {
         });
     }
 
-    public void updatePlayerItems(Player p, FileConfiguration playerFile, String item){
+    public void updatePlayerItems(Player p, FileConfiguration playerFile, String item) {
         Bukkit.getScheduler().runTaskAsynchronously(this, () -> {
             String selectedArea = playerFile.getString(p.getUniqueId() + ".selectedArea");
             List<String> areaItems = playerFile.getStringList("depositedItems." + selectedArea);
@@ -128,6 +132,10 @@ public final class Collectopaedia extends JavaPlugin implements Listener {
         return YamlConfiguration.loadConfiguration(file);
     }
 
+    public boolean playerFileExists(Player p) {
+        return new File(getDataFolder() + "/playerData", p.getUniqueId() + ".yml").exists();
+    }
+
     public void addArea(Player p, String areaName) {
         Bukkit.getScheduler().runTaskAsynchronously(this, () -> {
             FileConfiguration playerFile = loadPlayerData(p);
@@ -140,12 +148,17 @@ public final class Collectopaedia extends JavaPlugin implements Listener {
         });
     }
 
-    // Method to check if a YAML file exists
-    public boolean playerFileExists(Player p) {
-        return new File(getDataFolder() + "/playerData", p.getUniqueId() + ".yml").exists();
+    //Static file management
+    private void preloadCollectopaediaData() {
+        // Assuming 'itemsData.getKeys(false)' gives all the `selectedArea` keys
+        for (String area : itemsData.getKeys(false)) {
+            // Cache data for each area
+            areaDataCache.put(area, Map.of("veg", itemsData.getStringList(area + ".veg"), "fruit", itemsData.getStringList(area + ".fruit"), "flower", itemsData.getStringList(area + ".flower"), "animal", itemsData.getStringList(area + ".animal"), "bug", itemsData.getStringList(area + ".bug"), "nature", itemsData.getStringList(area + ".nature"), "parts", itemsData.getStringList(area + ".parts"), "strange", itemsData.getStringList(area + ".strange")));
+        }
+        getLogger().info("Collectopaedia data preloaded successfully.");
     }
 
-    private synchronized void createDataFile() {
+    private void createDataFile() {
         Bukkit.getScheduler().runTaskAsynchronously(this, () -> {
             File itemsFile = new File(getDataFolder(), "items.yml");
             if (!itemsFile.exists()) {

@@ -17,32 +17,17 @@ import java.util.concurrent.ConcurrentHashMap;
 
 public class OpenMenuCommand implements TabExecutor {
 
+    private static final Map<String, String> groupDisplayMap = Map.of("veg", "Veg", "fruit", "Fruit", "flower", "Flower", "animal", "Animal", "bug", "Bug", "nature", "Nature", "parts", "Parts", "strange", "Strange");
     public static int page = 1;
     private final Collectopaedia collectopaedia;
     private final ConcurrentHashMap<UUID, FileConfiguration> playerDataCache = new ConcurrentHashMap<>();
+    private final ItemStack infill = createItemStack(Material.LIGHT_GRAY_STAINED_GLASS_PANE, " ", true);
+    private final ItemStack backButton = createItemStack(Material.BARRIER, ChatColor.RED + "Back", false);
+    private final ItemStack lockedArea = createItemStack(Material.RED_STAINED_GLASS_PANE, ChatColor.DARK_RED + "Locked Area", false);
+    private final ItemStack nextPage = createItemStack(Material.PAPER, ChatColor.GREEN + "Next", false);
 
     public OpenMenuCommand(Collectopaedia collectopaedia) {
         this.collectopaedia = collectopaedia;
-    }
-
-    private static ItemStack getPercentMeter(int totalItems, Set<String> playerCollectedItems) {
-        ItemStack percentMeter = new ItemStack(Material.CLOCK);
-        ItemMeta meterMeta = percentMeter.getItemMeta();
-        if (totalItems > 0) {
-            int percent = playerCollectedItems.size() / totalItems;
-            meterMeta.setDisplayName(ChatColor.RED + "" + percent + " %");
-            if (percent > 25 && percent < 50) {
-                meterMeta.setDisplayName(ChatColor.GOLD + "" + percent + " %");
-            } else if (percent > 50 && percent < 75) {
-                meterMeta.setDisplayName(ChatColor.YELLOW + "" + percent + " %");
-            } else if (percent > 75) {
-                meterMeta.setDisplayName(ChatColor.GREEN + "" + percent + " %");
-            }
-        } else {
-            meterMeta.setDisplayName(ChatColor.RED + "0 %");
-        }
-        percentMeter.setItemMeta(meterMeta);
-        return percentMeter;
     }
 
     public void menuClick(Player p, ItemStack item) {
@@ -81,17 +66,17 @@ public class OpenMenuCommand implements TabExecutor {
             // Go through player's inventory to find and remove the item
             for (int i = 0; i < playerInv.getSize(); i++) {
                 if (submitItemName.equals(playerItems.get(i))) {
-                    final int index = i; // Capture the value of `i` into a final variable
+                    final int index = i;
                     collectopaedia.updatePlayerItems(p, playerFile, submitItemName);
 
                     Bukkit.getScheduler().runTask(collectopaedia, () -> {
-                        ItemStack itemRemove = playerInv.getItem(index); // Use captured `index`
+                        ItemStack itemRemove = playerInv.getItem(index);
                         if (itemRemove != null) {
                             int amount = itemRemove.getAmount();
                             if (amount > 1) {
                                 itemRemove.setAmount(amount - 1);
                             } else {
-                                playerInv.setItem(index, null); // Remove the item if it's the last one
+                                playerInv.setItem(index, null);
                             }
                             checkCollectopaedia(p, playerInv);
                         }
@@ -102,20 +87,13 @@ public class OpenMenuCommand implements TabExecutor {
         });
     }
 
-
-    private FileConfiguration getPlayerData(Player p) {
-        return playerDataCache.computeIfAbsent(p.getUniqueId(), _ -> collectopaedia.loadPlayerData(p));
-    }
-
     private void checkCollectopaedia(Player p, Inventory playerInv) {
         Bukkit.getScheduler().runTaskAsynchronously(collectopaedia, () -> {
             FileConfiguration playerFile = getPlayerData(p);
             String selectedArea = playerFile.getString(p.getUniqueId() + ".selectedArea");
             List<String> playerCollectedItems = playerFile.getStringList("depositedItems." + selectedArea);
             Set<String> playerCollectedItemsSet = new HashSet<>(playerCollectedItems);
-            Map<String, String> groupDisplayMap = Map.of("veg", "Veg", "fruit", "Fruit", "flower", "Flower", "animal", "Animal", "bug", "Bug", "nature", "Nature", "parts", "Parts", "strange", "Strange");
-            Map<String, List<String>> items = Map.of("veg", collectopaedia.itemsData.getStringList(selectedArea + ".veg"), "fruit", collectopaedia.itemsData.getStringList(selectedArea + ".fruit"), "flower", collectopaedia.itemsData.getStringList(selectedArea + ".flower"), "animal", collectopaedia.itemsData.getStringList(selectedArea + ".animal"), "bug", collectopaedia.itemsData.getStringList(selectedArea + ".bug"), "nature", collectopaedia.itemsData.getStringList(selectedArea + ".nature"), "parts", collectopaedia.itemsData.getStringList(selectedArea + ".parts"), "strange", collectopaedia.itemsData.getStringList(selectedArea + ".strange"));
-
+            Map<String, List<String>> items = collectopaedia.areaDataCache.get(selectedArea);
             boolean completedSomething = false;
 
             for (Map.Entry<String, List<String>> entry : items.entrySet()) {
@@ -125,15 +103,17 @@ public class OpenMenuCommand implements TabExecutor {
                 // Skip if the group contains "None"
                 if (!areaItems.contains("None") && playerCollectedItemsSet.containsAll(areaItems)) {
                     completedSomething = true;
-                    p.closeInventory();
 
                     // Get the reward and display group name
                     String reward = collectopaedia.rewardsData.getString(selectedArea + "." + group);
                     String displayGroup = groupDisplayMap.getOrDefault(group, group);
 
                     // Display completion message and play sound
-                    p.sendTitle(ChatColor.GREEN + "Completed: " + displayGroup, "Reward: " + reward, 6, 60, 12);
-                    p.playSound(p, Sound.UI_TOAST_CHALLENGE_COMPLETE, SoundCategory.MUSIC, 100, 1);
+                    Bukkit.getScheduler().runTask(collectopaedia, () -> {
+                        p.sendTitle(ChatColor.GREEN + "Completed: " + displayGroup, "Reward: " + reward, 6, 60, 12);
+                        p.playSound(p, Sound.UI_TOAST_CHALLENGE_COMPLETE, SoundCategory.MUSIC, 100, 1);
+                        p.closeInventory();
+                    });
 
                     //TODO Give the player the rewards for completing the row/page.
 
@@ -141,338 +121,44 @@ public class OpenMenuCommand implements TabExecutor {
                 }
             }
             if (completedSomething) {
-                updatePlayerInv(p, playerInv);
+                Bukkit.getScheduler().runTask(collectopaedia, () -> updatePlayerInv(p, playerInv));
             }
         });
-
     }
 
     private void updatePlayerInv(Player p, Inventory gui) {
+        // Fetch data asynchronously
         Bukkit.getScheduler().runTaskAsynchronously(collectopaedia, () -> {
             FileConfiguration playerFile = getPlayerData(p);
             String selectedArea = playerFile.getString(p.getUniqueId() + ".selectedArea");
+            Map<String, List<String>> cachedAreaData = collectopaedia.areaDataCache.get(selectedArea);
 
-            List<String> vegList = collectopaedia.itemsData.getStringList(selectedArea + ".veg");
-            List<String> fruitList = collectopaedia.itemsData.getStringList(selectedArea + ".fruit");
-            List<String> flowerList = collectopaedia.itemsData.getStringList(selectedArea + ".flower");
-            List<String> animalList = collectopaedia.itemsData.getStringList(selectedArea + ".animal");
-            List<String> bugList = collectopaedia.itemsData.getStringList(selectedArea + ".bug");
-            List<String> natureList = collectopaedia.itemsData.getStringList(selectedArea + ".nature");
-            List<String> partsList = collectopaedia.itemsData.getStringList(selectedArea + ".parts");
-            List<String> strangeList = collectopaedia.itemsData.getStringList(selectedArea + ".strange");
+            List<String> vegList = cachedAreaData.get("veg");
+            List<String> fruitList = cachedAreaData.get("fruit");
+            List<String> flowerList = cachedAreaData.get("flower");
+            List<String> animalList = cachedAreaData.get("animal");
+            List<String> bugList = cachedAreaData.get("bug");
+            List<String> natureList = cachedAreaData.get("nature");
+            List<String> partsList = cachedAreaData.get("parts");
+            List<String> strangeList = cachedAreaData.get("strange");
+
+            // Player data
             PlayerInventory playerInv = p.getInventory();
-
             Map<Integer, String> playerItemNamesMap = getPlayerItemNames(playerInv);
             List<String> playerItemNames = new ArrayList<>(playerItemNamesMap.values());
-
-            List<String> playerAreas = playerFile.getStringList("unlockedArea");
             Set<String> playerCollectedItems = new HashSet<>(playerFile.getStringList("depositedItems." + selectedArea));
             int totalItems = collectopaedia.itemsData.getInt(selectedArea + ".count");
             List<String> areaList = collectopaedia.areasData.getStringList("areas");
+            List<String> playerAreas = playerFile.getStringList("unlockedArea");
 
-            //Area Items
-            int invSlot = 0;
-            ItemStack areaItem = new ItemStack(Material.PAPER);
-            ItemMeta areaMeta = areaItem.getItemMeta();
-            for (String s : areaList) {
-                String[] areaParts = s.split(",");
-                if (playerAreas.contains(areaParts[0].trim())) {
-                    areaMeta.setDisplayName(areaParts[1].trim());
-                    if (selectedArea.equals(areaParts[0].trim())) {
-                        areaItem.setType(Material.MAP);
-                    } else {
-                        areaItem.setType(Material.PAPER);
-                    }
-                    areaItem.setItemMeta(areaMeta);
-                    gui.setItem(invSlot++, areaItem);
-                    if (invSlot > 8 && invSlot < 44) {
-                        invSlot += 8;
-                    } else if (invSlot == 45) {
-                        invSlot = gui.getSize() - 1;
-                    } else if (invSlot > 45) {
-                        invSlot -= 2;
-                    }
-                }
-            }
-
-
-            //Percent Meter
-            ItemStack percentMeter = getPercentMeter(totalItems, playerCollectedItems);
-            gui.setItem(9, percentMeter);
-
-            //Cat Items
-            ItemStack vegItem = new ItemStack(Material.EMERALD);
-            ItemMeta vegMeta = vegItem.getItemMeta();
-            vegMeta.setCustomModelData(4);
-            vegMeta.setDisplayName(ChatColor.WHITE + "Veg");
-            vegMeta.setHideTooltip(false);
-            vegItem.setItemMeta(vegMeta);
-
-            ItemStack fruitItem = new ItemStack(Material.EMERALD);
-            ItemMeta fruitMeta = fruitItem.getItemMeta();
-            fruitMeta.setCustomModelData(5);
-            fruitMeta.setDisplayName(ChatColor.WHITE + "Fruit");
-            fruitMeta.setHideTooltip(false);
-            fruitItem.setItemMeta(fruitMeta);
-
-            ItemStack flowerItem = new ItemStack(Material.EMERALD);
-            ItemMeta flowerMeta = flowerItem.getItemMeta();
-            flowerMeta.setCustomModelData(6);
-            flowerMeta.setDisplayName(ChatColor.WHITE + "Flower");
-            flowerMeta.setHideTooltip(false);
-            flowerItem.setItemMeta(flowerMeta);
-
-            ItemStack animalItem = new ItemStack(Material.EMERALD);
-            ItemMeta animalMeta = animalItem.getItemMeta();
-            animalMeta.setCustomModelData(7);
-            animalMeta.setDisplayName(ChatColor.WHITE + "Animal");
-            animalMeta.setHideTooltip(false);
-            animalItem.setItemMeta(animalMeta);
-
-            ItemStack bugItem = new ItemStack(Material.EMERALD);
-            ItemMeta bugMeta = bugItem.getItemMeta();
-            bugMeta.setCustomModelData(8);
-            bugMeta.setDisplayName(ChatColor.WHITE + "Bug");
-            bugMeta.setHideTooltip(false);
-            bugItem.setItemMeta(bugMeta);
-
-            ItemStack natureItem = new ItemStack(Material.EMERALD);
-            ItemMeta natureMeta = natureItem.getItemMeta();
-            natureMeta.setCustomModelData(9);
-            natureMeta.setDisplayName(ChatColor.WHITE + "Nature");
-            natureMeta.setHideTooltip(false);
-            natureItem.setItemMeta(natureMeta);
-
-            ItemStack partsItem = new ItemStack(Material.EMERALD);
-            ItemMeta partsMeta = partsItem.getItemMeta();
-            partsMeta.setCustomModelData(10);
-            partsMeta.setDisplayName(ChatColor.WHITE + "Parts");
-            partsMeta.setHideTooltip(false);
-            partsItem.setItemMeta(partsMeta);
-
-            ItemStack strangeItem = new ItemStack(Material.EMERALD);
-            ItemMeta strangeMeta = strangeItem.getItemMeta();
-            strangeMeta.setCustomModelData(11);
-            strangeMeta.setDisplayName(ChatColor.WHITE + "Strange");
-            strangeMeta.setHideTooltip(false);
-            strangeItem.setItemMeta(strangeMeta);
-
-            ItemStack infill = new ItemStack(Material.LIGHT_GRAY_STAINED_GLASS_PANE);
-            ItemMeta infillMeta = infill.getItemMeta();
-            Objects.requireNonNull(infillMeta).setDisplayName(" ");
-            infillMeta.setHideTooltip(true);
-            infill.setItemMeta(infillMeta);
-
-            if (page == 1) {
-                gui.setItem(10, vegItem);
-                gui.setItem(19, fruitItem);
-                gui.setItem(28, flowerItem);
-                gui.setItem(37, animalItem);
-            } else if (page == 2) {
-                gui.setItem(10, bugItem);
-                gui.setItem(19, natureItem);
-                gui.setItem(28, partsItem);
-                gui.setItem(37, strangeItem);
-            }
-
-            //Items
-            ItemStack neededItem = new ItemStack(Material.BLACK_STAINED_GLASS_PANE);
-            ItemMeta neededMeta = neededItem.getItemMeta();
-            neededMeta.setHideTooltip(true);
-            neededItem.setItemMeta(neededMeta);
-
-            ItemStack hasItem = new ItemStack(Material.BLUE_STAINED_GLASS_PANE);
-            ItemMeta hasMeta = hasItem.getItemMeta();
-
-            int slotOffset = 0;
-
-            if (page == 1) {
-                if (!vegList.contains("None")) {
-                    for (String s : vegList) {
-                        if (playerCollectedItems.contains(s)) {
-                            vegMeta.setDisplayName(ChatColor.AQUA + s);
-                            vegItem.setItemMeta(vegMeta);
-                            gui.setItem(11 + slotOffset, vegItem);
-                            slotOffset++;
-                        } else if (playerItemNames.contains(s)) {
-                            hasMeta.setDisplayName(ChatColor.GREEN + s);
-                            hasItem.setItemMeta(hasMeta);
-                            gui.setItem(11 + slotOffset, hasItem);
-                            slotOffset++;
-                        } else {
-                            gui.setItem(11 + slotOffset, neededItem);
-                            slotOffset++;
-                        }
-                    }
-                } else {
-                    for (int t = 0; t < 5; t++) {
-                        gui.setItem(20 + t, infill);
-                    }
-                }
-                slotOffset = 0;
-                if (!fruitList.contains("None")) {
-                    for (String s : fruitList) {
-                        if (playerCollectedItems.contains(s)) {
-                            fruitMeta.setDisplayName(ChatColor.AQUA + s);
-                            fruitItem.setItemMeta(fruitMeta);
-                            gui.setItem(20 + slotOffset, fruitItem);
-                            slotOffset++;
-                        } else if (playerItemNames.contains(s)) {
-                            hasMeta.setDisplayName(ChatColor.GREEN + s);
-                            hasItem.setItemMeta(hasMeta);
-                            gui.setItem(20 + slotOffset, hasItem);
-                            slotOffset++;
-                        } else {
-                            gui.setItem(20 + slotOffset, neededItem);
-                            slotOffset++;
-                        }
-                    }
-                } else {
-                    for (int t = 0; t < 5; t++) {
-                        gui.setItem(20 + t, infill);
-                    }
-                }
-                slotOffset = 0;
-                if (!flowerList.contains("None")) {
-                    for (String s : flowerList) {
-                        if (playerCollectedItems.contains(s)) {
-                            flowerMeta.setDisplayName(ChatColor.AQUA + s);
-                            flowerItem.setItemMeta(flowerMeta);
-                            gui.setItem(29 + slotOffset, flowerItem);
-                            slotOffset++;
-                        } else if (playerItemNames.contains(s)) {
-                            hasMeta.setDisplayName(ChatColor.GREEN + s);
-                            hasItem.setItemMeta(hasMeta);
-                            gui.setItem(29 + slotOffset, hasItem);
-                            slotOffset++;
-                        } else {
-                            gui.setItem(29 + slotOffset, neededItem);
-                            slotOffset++;
-                        }
-                    }
-                } else {
-                    for (int t = 0; t < 5; t++) {
-                        gui.setItem(29 + t, infill);
-                    }
-                }
-                slotOffset = 0;
-                if (!animalList.contains("None")) {
-                    for (String s : animalList) {
-                        if (playerCollectedItems.contains(s)) {
-                            animalMeta.setDisplayName(ChatColor.AQUA + s);
-                            animalItem.setItemMeta(animalMeta);
-                            gui.setItem(38 + slotOffset, animalItem);
-                            slotOffset++;
-                        } else if (playerItemNames.contains(s)) {
-                            hasMeta.setDisplayName(ChatColor.GREEN + s);
-                            hasItem.setItemMeta(hasMeta);
-                            gui.setItem(38 + slotOffset, hasItem);
-                            slotOffset++;
-                        } else {
-                            gui.setItem(38 + slotOffset, neededItem);
-                            slotOffset++;
-                        }
-                    }
-                } else {
-                    for (int t = 0; t < 5; t++) {
-                        gui.setItem(38 + t, infill);
-                    }
-                }
-            } else if (page == 2) {
-                if (!bugList.contains("None")) {
-                    for (String s : bugList) {
-                        if (playerCollectedItems.contains(s)) {
-                            bugMeta.setDisplayName(ChatColor.AQUA + s);
-                            bugItem.setItemMeta(bugMeta);
-                            gui.setItem(11 + slotOffset, bugItem);
-                            slotOffset++;
-                        } else if (playerItemNames.contains(s)) {
-                            hasMeta.setDisplayName(ChatColor.GREEN + s);
-                            hasItem.setItemMeta(hasMeta);
-                            gui.setItem(11 + slotOffset, hasItem);
-                            slotOffset++;
-                        } else {
-                            gui.setItem(11 + slotOffset, neededItem);
-                            slotOffset++;
-                        }
-                    }
-                } else {
-                    for (int t = 0; t < 5; t++) {
-                        gui.setItem(20 + t, infill);
-                    }
-                }
-                slotOffset = 0;
-                if (!natureList.contains("None")) {
-                    for (String s : natureList) {
-                        if (playerCollectedItems.contains(s)) {
-                            natureMeta.setDisplayName(ChatColor.AQUA + s);
-                            natureItem.setItemMeta(natureMeta);
-                            gui.setItem(20 + slotOffset, natureItem);
-                            slotOffset++;
-                        } else if (playerItemNames.contains(s)) {
-                            hasMeta.setDisplayName(ChatColor.GREEN + s);
-                            hasItem.setItemMeta(hasMeta);
-                            gui.setItem(20 + slotOffset, hasItem);
-                            slotOffset++;
-                        } else {
-                            gui.setItem(20 + slotOffset, neededItem);
-                            slotOffset++;
-                        }
-                    }
-                } else {
-                    for (int t = 0; t < 5; t++) {
-                        gui.setItem(20 + t, infill);
-                    }
-                }
-                slotOffset = 0;
-                if (!partsList.contains("None")) {
-                    for (String s : partsList) {
-                        if (playerCollectedItems.contains(s)) {
-                            partsMeta.setDisplayName(ChatColor.AQUA + s);
-                            partsItem.setItemMeta(flowerMeta);
-                            gui.setItem(29 + slotOffset, partsItem);
-                            slotOffset++;
-                        } else if (playerItemNames.contains(s)) {
-                            hasMeta.setDisplayName(ChatColor.GREEN + s);
-                            hasItem.setItemMeta(hasMeta);
-                            gui.setItem(29 + slotOffset, hasItem);
-                            slotOffset++;
-                        } else {
-                            gui.setItem(29 + slotOffset, neededItem);
-                            slotOffset++;
-                        }
-                    }
-                } else {
-                    for (int t = 0; t < 5; t++) {
-                        gui.setItem(29 + t, infill);
-                    }
-                }
-                slotOffset = 0;
-                if (!strangeList.contains("None")) {
-                    for (String s : strangeList) {
-                        if (playerCollectedItems.contains(s)) {
-                            strangeMeta.setDisplayName(ChatColor.AQUA + s);
-                            strangeItem.setItemMeta(strangeMeta);
-                            gui.setItem(38 + slotOffset, strangeItem);
-                            slotOffset++;
-                        } else if (playerItemNames.contains(s)) {
-                            hasMeta.setDisplayName(ChatColor.GREEN + s);
-                            hasItem.setItemMeta(hasMeta);
-                            gui.setItem(38 + slotOffset, hasItem);
-                            slotOffset++;
-                        } else {
-                            gui.setItem(38 + slotOffset, neededItem);
-                            slotOffset++;
-                        }
-                    }
-                } else {
-                    for (int t = 0; t < 5; t++) {
-                        gui.setItem(38 + t, infill);
-                    }
-                }
-            }
-
+            // After async processing, switch back to main thread for GUI updates
             Bukkit.getScheduler().runTask(collectopaedia, () -> {
+                // Update inventory safely on the main thread
+                updateAreaItems(gui, areaList, playerAreas, selectedArea);
+                updatePercentMeter(gui, totalItems, playerCollectedItems);
+                updateCategoryItems(gui, page, vegList, fruitList, flowerList, animalList, bugList, natureList, partsList, strangeList, playerCollectedItems, playerItemNames);
+
+                // Update player inventory view if necessary
                 Inventory currentInv = p.getOpenInventory().getTopInventory();
                 if (!gui.equals(currentInv)) {
                     p.updateInventory();
@@ -481,79 +167,36 @@ public class OpenMenuCommand implements TabExecutor {
         });
     }
 
-    private Map<Integer, String> getPlayerItemNames(PlayerInventory playerInv) {
-        Map<Integer, String> playerItemNames = new HashMap<>();
-        String aquaColorCode = ChatColor.AQUA + "";
-        for (int i = 0; i < playerInv.getSize(); i++) {
-            ItemStack item = playerInv.getItem(i);
-            if (item != null) {
-                ItemMeta itemMeta = item.getItemMeta();
-                if (itemMeta != null) {
-                    String itemName = itemMeta.getDisplayName();
-                    if (itemName.contains(aquaColorCode)) {
-                        playerItemNames.put(i, itemName.replace(ChatColor.AQUA + "", ""));
-                    }
-                }
-            }
-        }
-        return playerItemNames;
-    }
-
-
     @Override
     public boolean onCommand(CommandSender sender, Command command, String s, String[] args) {
+        if (!(sender instanceof Player p)) {
+            sender.sendMessage("This command can only be run by a player.");
+            return false;
+        }
         Bukkit.getScheduler().runTaskAsynchronously(collectopaedia, () -> {
-            if (sender instanceof Player p) {
-                int rows = 6;
-                int cols = 9;
-                int invSize = (rows * cols);
+            int rows = 6;
+            int cols = 9;
+            int invSize = (rows * cols);
 
+            Bukkit.getScheduler().runTask(collectopaedia, () -> {
                 Inventory gui = Bukkit.createInventory(p, invSize, ChatColor.DARK_GREEN + "Collectopaedia");
 
-                //Create infill and back items.
-                ItemStack infill = new ItemStack(Material.LIGHT_GRAY_STAINED_GLASS_PANE);
-                ItemMeta infillMeta = infill.getItemMeta();
-                Objects.requireNonNull(infillMeta).setDisplayName(" ");
-                infillMeta.setHideTooltip(true);
-                infill.setItemMeta(infillMeta);
-
-                ItemStack backButton = new ItemStack(Material.BARRIER);
-                ItemMeta backMeta = backButton.getItemMeta();
-                Objects.requireNonNull(backMeta).setDisplayName(ChatColor.RED + "Back");
-                backMeta.setHideTooltip(false);
-                backButton.setItemMeta(backMeta);
-
-                ItemStack lockedArea = new ItemStack(Material.RED_STAINED_GLASS_PANE);
-                ItemMeta lockedAreaMeta = lockedArea.getItemMeta();
-                Objects.requireNonNull(lockedAreaMeta).setDisplayName(ChatColor.DARK_RED + "Locked Area");
-                lockedAreaMeta.setHideTooltip(false);
-                lockedArea.setItemMeta(lockedAreaMeta);
-
-                ItemStack nextPage = new ItemStack(Material.PAPER);
-                ItemMeta nextPageMeta = nextPage.getItemMeta();
-                Objects.requireNonNull(nextPageMeta).setDisplayName(ChatColor.GREEN + "Next");
-                nextPageMeta.setHideTooltip(false);
-                nextPage.setItemMeta(nextPageMeta);
-
-                //Fills in the inv.
-                for (int slot = 8; slot < invSize; slot++) {
-                    gui.setItem(slot, infill);
-                }
-                for (int slot = 0; slot < 9; slot++) {
-                    gui.setItem(slot, lockedArea);
-                }
-                for (int slot = 8; slot < invSize; slot += 9) {
-                    gui.setItem(slot, lockedArea);
-                }
-                for (int slot = 46; slot < invSize; slot++) {
-                    gui.setItem(slot, lockedArea);
+                // Fill inventory slots efficiently
+                for (int slot = 0; slot < invSize; slot++) {
+                    // Fill lockedArea for border slots
+                    if (slot < 9 || slot % 9 == 0 || slot >= 45) {
+                        gui.setItem(slot, lockedArea);
+                    } else {
+                        // Fill infill for all other slots
+                        gui.setItem(slot, infill);
+                    }
                 }
 
                 gui.setItem(36, nextPage);
                 gui.setItem(45, backButton);
 
                 updatePlayerInv(p, gui);
-            }
+            });
         });
         return true;
     }
@@ -561,5 +204,154 @@ public class OpenMenuCommand implements TabExecutor {
     @Override
     public List<String> onTabComplete(CommandSender commandSender, Command command, String s, String[] strings) {
         return List.of();
+    }
+
+    //Helper Methods
+    private FileConfiguration getPlayerData(Player p) {
+        return playerDataCache.computeIfAbsent(p.getUniqueId(), _ -> collectopaedia.loadPlayerData(p));
+    }
+
+    private Map<Integer, String> getPlayerItemNames(PlayerInventory playerInv) {
+        Map<Integer, String> playerItemNames = new HashMap<>();
+        String aquaColorCode = ChatColor.AQUA.toString();
+
+        for (int i = 0; i < playerInv.getSize(); i++) {
+            ItemStack item = playerInv.getItem(i);
+            if (item != null) {
+                ItemMeta itemMeta = item.getItemMeta();
+                if (itemMeta != null) {
+                    String itemName = itemMeta.getDisplayName();
+                    if (itemName.contains(aquaColorCode)) {
+                        playerItemNames.put(i, itemName.replace(aquaColorCode, ""));
+                    }
+                }
+            }
+        }
+        return playerItemNames;
+    }
+
+    private ItemStack getPercentMeter(int totalItems, Set<String> playerCollectedItems) {
+        ItemStack percentMeter = new ItemStack(Material.CLOCK);
+        ItemMeta meterMeta = percentMeter.getItemMeta();
+        if (totalItems > 0) {
+            int percent = playerCollectedItems.size() / totalItems;
+            meterMeta.setDisplayName(ChatColor.RED + "" + percent + " %");
+            if (percent > 25 && percent < 50) {
+                meterMeta.setDisplayName(ChatColor.GOLD + "" + percent + " %");
+            } else if (percent > 50 && percent < 75) {
+                meterMeta.setDisplayName(ChatColor.YELLOW + "" + percent + " %");
+            } else if (percent > 75) {
+                meterMeta.setDisplayName(ChatColor.GREEN + "" + percent + " %");
+            }
+        } else {
+            meterMeta.setDisplayName(ChatColor.RED + "0 %");
+        }
+        percentMeter.setItemMeta(meterMeta);
+        return percentMeter;
+    }
+
+    private void updatePercentMeter(Inventory gui, int totalItems, Set<String> playerCollectedItems) {
+        ItemStack percentMeter = getPercentMeter(totalItems, playerCollectedItems);
+        gui.setItem(9, percentMeter);
+    }
+
+    private void updateCategoryItems(Inventory gui, int page, List<String> vegList, List<String> fruitList, List<String> flowerList, List<String> animalList, List<String> bugList, List<String> natureList, List<String> partsList, List<String> strangeList, Set<String> playerCollectedItems, List<String> playerItemNames) {
+
+        // Item settings for different categories
+        Map<String, ItemStack> categoryItems = Map.of("veg", createCategoryItem(Material.EMERALD, 4, "Veg"), "fruit", createCategoryItem(Material.EMERALD, 5, "Fruit"), "flower", createCategoryItem(Material.EMERALD, 6, "Flower"), "animal", createCategoryItem(Material.EMERALD, 7, "Animal"), "bug", createCategoryItem(Material.EMERALD, 8, "Bug"), "nature", createCategoryItem(Material.EMERALD, 9, "Nature"), "parts", createCategoryItem(Material.EMERALD, 10, "Parts"), "strange", createCategoryItem(Material.EMERALD, 11, "Strange"));
+
+        ItemStack neededItem = new ItemStack(Material.BLACK_STAINED_GLASS_PANE);
+        neededItem.setItemMeta(new ItemStack(Material.BLACK_STAINED_GLASS_PANE).getItemMeta());
+
+        ItemStack hasItem = new ItemStack(Material.BLUE_STAINED_GLASS_PANE);
+
+        // Set items based on page (page 1 or 2)
+        List<String>[] lists = page == 1 ? new List[]{vegList, fruitList, flowerList, animalList} : new List[]{bugList, natureList, partsList, strangeList};
+        String[] categories = page == 1 ? new String[]{"veg", "fruit", "flower", "animal"} : new String[]{"bug", "nature", "parts", "strange"};
+        int[] baseSlots = new int[]{10, 19, 28, 37};
+
+        // Loop over categories and update inventory
+        for (int i = 0; i < categories.length; i++) {
+            String category = categories[i];
+            List<String> itemList = lists[i];
+            int baseSlot = baseSlots[i];
+
+            if (itemList.contains("None")) {
+                fillEmptySlots(gui, baseSlot, 5);
+                continue;
+            }
+
+            ItemStack categoryItem = categoryItems.get(category);
+            ItemMeta hasMeta = hasItem.getItemMeta();
+            int slotOffset = 0;
+
+            for (String item : itemList) {
+                if (playerCollectedItems.contains(item)) {
+                    categoryItem.setItemMeta(categoryItem.getItemMeta());
+                    gui.setItem(baseSlot + slotOffset, categoryItem);
+                } else if (playerItemNames.contains(item)) {
+                    hasMeta.setDisplayName(ChatColor.GREEN + item);
+                    hasItem.setItemMeta(hasMeta);
+                    gui.setItem(baseSlot + slotOffset, hasItem);
+                } else {
+                    gui.setItem(baseSlot + slotOffset, neededItem);
+                }
+                slotOffset++;
+            }
+        }
+    }
+
+    private void updateAreaItems(Inventory gui, List<String> areaList, List<String> playerAreas, String selectedArea) {
+        ItemStack areaItem = new ItemStack(Material.PAPER);
+        ItemMeta areaMeta = areaItem.getItemMeta();
+        int invSlot = 0;
+
+        for (String s : areaList) {
+            String[] areaParts = s.split(",");
+            if (playerAreas.contains(areaParts[0].trim())) {
+                areaMeta.setDisplayName(areaParts[1].trim());
+                areaItem.setType(selectedArea.equals(areaParts[0].trim()) ? Material.MAP : Material.PAPER);
+                areaItem.setItemMeta(areaMeta);
+                gui.setItem(invSlot++, areaItem);
+                if (invSlot > 8 && invSlot < 44) {
+                    invSlot += 8;
+                } else if (invSlot == 45) {
+                    invSlot = gui.getSize() - 1;
+                } else if (invSlot > 45) {
+                    invSlot -= 2;
+                }
+            }
+        }
+    }
+
+    private ItemStack createItemStack(Material material, String displayName, boolean hideTooltip) {
+        ItemStack item = new ItemStack(material);
+        ItemMeta meta = item.getItemMeta();
+        Objects.requireNonNull(meta).setDisplayName(displayName);
+        meta.setHideTooltip(hideTooltip);
+        item.setItemMeta(meta);
+        return item;
+    }
+
+    private ItemStack createCategoryItem(Material material, int customModelData, String displayName) {
+        ItemStack item = new ItemStack(material);
+        ItemMeta meta = item.getItemMeta();
+        meta.setCustomModelData(customModelData);
+        meta.setDisplayName(ChatColor.WHITE + displayName);
+        meta.setHideTooltip(false);
+        item.setItemMeta(meta);
+        return item;
+    }
+
+    private void fillEmptySlots(Inventory gui, int baseSlot, int count) {
+        ItemStack infill = new ItemStack(Material.LIGHT_GRAY_STAINED_GLASS_PANE);
+        ItemMeta infillMeta = infill.getItemMeta();
+        infillMeta.setDisplayName(" ");
+        infillMeta.setHideTooltip(true);
+        infill.setItemMeta(infillMeta);
+
+        for (int i = 0; i < count; i++) {
+            gui.setItem(baseSlot + i, infill);
+        }
     }
 }

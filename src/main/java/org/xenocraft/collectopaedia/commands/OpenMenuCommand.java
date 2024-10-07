@@ -195,6 +195,7 @@ public class OpenMenuCommand implements TabExecutor {
                 gui.setItem(36, nextPage);
                 gui.setItem(45, backButton);
 
+                p.openInventory(gui);
                 updatePlayerInv(p, gui);
             });
         });
@@ -208,7 +209,7 @@ public class OpenMenuCommand implements TabExecutor {
 
     //Helper Methods
     private FileConfiguration getPlayerData(Player p) {
-        return playerDataCache.computeIfAbsent(p.getUniqueId(), _ -> collectopaedia.loadPlayerData(p));
+        return playerDataCache.computeIfAbsent(p.getUniqueId(), id -> collectopaedia.loadPlayerData(p));
     }
 
     private Map<Integer, String> getPlayerItemNames(PlayerInventory playerInv) {

@@ -1,6 +1,5 @@
 package org.xenocraft.collectopaedia.listener;
 
-import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
@@ -17,13 +16,13 @@ public class PlayerJoinLeaveListener implements Listener {
     @EventHandler
     public void onPlayerJoin(PlayerJoinEvent event) {
         Player p = event.getPlayer();
-        Bukkit.getScheduler().runTaskAsynchronously(collectopaedia, () -> {
-            if (!collectopaedia.playerFileExists(p)) {
-                collectopaedia.createPlayerFile(p);
-                collectopaedia.updatePlayerFile(p);
-            } else {
-                collectopaedia.updatePlayerFile(p);
-            }
-        });
+
+        if (!collectopaedia.playerFileExists(p)) {
+            collectopaedia.createPlayerFile(p);
+            //collectopaedia.updatePlayerFile(p);
+        } else {
+            collectopaedia.updatePlayerFile(p);
+        }
+
     }
 }

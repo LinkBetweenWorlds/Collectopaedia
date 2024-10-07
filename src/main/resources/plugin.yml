@@ -1,12 +1,12 @@
 name: Collectopaedia
 version: '${project.version}'
 main: org.xenocraft.collectopaedia.Collectopaedia
-api-version: '1.21.1'
+api-version: '1.21'
 author: Blink9085
 description: Collectopaedia plugin for Xenocraft
 
 commands:
-  collectopaedia:
+  open:
     description: Opens Collectopaedia Menu
     usage: /<command>
   reloadconfig:

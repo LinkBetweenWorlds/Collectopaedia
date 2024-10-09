@@ -87,6 +87,7 @@ public final class Collectopaedia extends JavaPlugin implements Listener {
                         List<String> list = List.of("other", "colony9");
                         playerFile.set("unlockedArea", list);
                         playerFile.set("depositedItems", list);
+                        playerFile.set("rewards", "colony9");
 
                         // Save the data to the file
                         savePlayerFile(playerFile, p);
@@ -143,6 +144,14 @@ public final class Collectopaedia extends JavaPlugin implements Listener {
         Bukkit.getScheduler().runTaskAsynchronously(this, () -> {
             FileConfiguration playerFile = loadPlayerData(p);
             playerFile.set("selectedArea", area);
+            savePlayerFile(playerFile, p);
+        });
+    }
+
+    public void updatePlayerReward(Player p, String area, String category) {
+        Bukkit.getScheduler().runTaskAsynchronously(this, () -> {
+            FileConfiguration playerFile = loadPlayerData(p);
+            playerFile.set("rewards." + area, category);
             savePlayerFile(playerFile, p);
         });
     }

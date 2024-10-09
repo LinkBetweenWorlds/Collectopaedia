@@ -1,6 +1,8 @@
 package org.xenocraft.collectopaedia.commands;
 
-import org.bukkit.*;
+import org.bukkit.Bukkit;
+import org.bukkit.ChatColor;
+import org.bukkit.Material;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
 import org.bukkit.command.TabExecutor;
@@ -14,6 +16,7 @@ import org.xenocraft.collectopaedia.Collectopaedia;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.logging.Level;
 
 public class OpenMenuCommand implements TabExecutor {
 
@@ -56,8 +59,11 @@ public class OpenMenuCommand implements TabExecutor {
             } else if (itemName.contains("Next")) {
                 page = (page == 2) ? 1 : 2;
                 updatePlayerInv(p, inv);
-            } else if (!areaList.contains(itemName) && (itemType == Material.BLUE_STAINED_GLASS_PANE)) {
-                submitItem(p, item);
+            } else if (!areaList.contains(itemName)) {
+                if (itemType == Material.EMERALD || itemType == Material.BLUE_STAINED_GLASS_PANE) {
+                    //TODO Update so that player can submit item for inv and menu.
+                    submitItem(p, item);
+                }
             } else {
                 areaList.forEach(s -> {
                     String[] areaParts = s.split(",");
@@ -74,74 +80,85 @@ public class OpenMenuCommand implements TabExecutor {
     }
 
     // Handles submitting an item from the player's inventory
+    //TODO rewrite both submitItem and checkCollectopaedia
+    // Make it so that the player can select the item in their inv or the tile in the menu.
+    // Make sure that the player can't enter an item if they have already submitted it.
+    // Close inv only if the player completed a row/page, otherwise keep the menu open.
+    // Make sure one one item is taken.
+    // Only give reward once.
+    //TODO submitItem logic
+    // Check if player has already submitted item, if so break.
+    // Check if item is a collectopaedia item that can be submitted.
+    // If not take item, and update player files.
+    // Give player the reward.
+    // If need to give reward close inv to display fancy message.
+    // If not update inv to allow player to submit multiple item with having to reopen the menu.
+
     private void submitItem(Player p, ItemStack item) {
         Bukkit.getScheduler().runTaskAsynchronously(collectopaedia, () -> {
-            FileConfiguration playerFile = getPlayerData(p);
-            PlayerInventory playerInv = p.getInventory();
-            String submitItemName = item.getItemMeta().getDisplayName().replace(ChatColor.AQUA + "", "");
-            Map<Integer, String> playerItems = getPlayerItemNames(playerInv);
+            try {
+                FileConfiguration playerFile = getPlayerData(p);
+                String itemName = formatItemName(item);
+                String selectedArea = playerFile.getString(p.getUniqueId() + ".selectedArea");
+                Map<String, List<String>> areaItems = collectopaedia.areaDataCache.get(selectedArea);
+                List<String> playerCollectedItems = playerFile.getStringList("depositedItems." + selectedArea);
 
-            // Go through player's inventory to find and remove the item
-            for (int i = 0; i < playerInv.getSize(); i++) {
-                if (submitItemName.equals(playerItems.get(i))) {
-                    final int index = i;
-                    collectopaedia.updatePlayerItems(p, playerFile, submitItemName);
-
-                    // Schedule item removal on the main thread
-                    Bukkit.getScheduler().runTask(collectopaedia, () -> {
-                        ItemStack itemRemove = playerInv.getItem(index);
-                        if (itemRemove != null) {
-                            int amount = itemRemove.getAmount();
-                            if (amount > 1) {
-                                itemRemove.setAmount(amount - 1);
-                            } else {
-                                playerInv.setItem(index, null);
-                            }
-                            checkCollectopaedia(p, playerInv);
-                        }
-                    });
-                    break;  // Item found and processed, exit loop
+                // Check if the player has not already submitted the item
+                if (playerCollectedItems.contains(itemName)) {
+                    return; // Player has already submitted the item, so do nothing
                 }
+
+                for (Map.Entry<String, List<String>> entry : areaItems.entrySet()) {
+                    String group = entry.getKey();
+                    List<String> groupItems = entry.getValue();
+                    if (groupItems.contains(itemName)) {
+                        collectopaedia.updatePlayerItems(p, playerFile, itemName);
+                        Bukkit.getScheduler().runTask(collectopaedia, () -> {
+                            PlayerInventory inventory = p.getInventory();
+                            inventory.removeItem(item);
+                        });
+                        checkReward(p, selectedArea);
+                        updatePlayerInv(p, p.getInventory());
+                        return; // Exit once the item is submitted
+                    }
+                }
+            } catch (Exception e) {
+                Bukkit.getLogger().log(Level.SEVERE, "Error processing async task", e);
             }
         });
     }
 
-    // Checks if the player has completed a collectopaedia group
-    private void checkCollectopaedia(Player p, Inventory playerInv) {
+    // Utility method to format item names consistently
+    private String formatItemName(ItemStack item) {
+        return item.getItemMeta().getDisplayName().trim().replace(ChatColor.AQUA + "", "");
+    }
+
+    //TODO Give player items based off area and group.
+    // Logic
+    // Get a list of fill with the rewards that player has already claimed for that area.
+    // Check if the player has completed any groups that they have not claimed the reward for.
+    // If player has completed the group give them that reward and update files.
+    private void checkReward(Player p, String selectedArea) {
         Bukkit.getScheduler().runTaskAsynchronously(collectopaedia, () -> {
-            FileConfiguration playerFile = getPlayerData(p);
-            String selectedArea = playerFile.getString(p.getUniqueId() + ".selectedArea");
-            List<String> playerCollectedItems = playerFile.getStringList("depositedItems." + selectedArea);
-            Set<String> playerCollectedItemsSet = new HashSet<>(playerCollectedItems);
-            Map<String, List<String>> items = collectopaedia.areaDataCache.get(selectedArea);
-            boolean completedSomething = false;
+            try {
+                FileConfiguration playerFile = getPlayerData(p);
+                synchronized (playerFile) {
+                    List<String> playerDepositedItems = playerFile.getStringList("depositedItems." + selectedArea);
+                    List<String> playerClaimedRewards = playerFile.getStringList("rewards." + selectedArea);
+                    Map<String, List<String>> areaItems = collectopaedia.areaDataCache.get(selectedArea);
 
-            for (Map.Entry<String, List<String>> entry : items.entrySet()) {
-                String group = entry.getKey();
-                List<String> areaItems = entry.getValue();
-
-                // Skip if the group contains "None"
-                if (!areaItems.contains("None") && playerCollectedItemsSet.containsAll(areaItems)) {
-                    completedSomething = true;
-
-                    // Get the reward and display the group name
-                    String reward = collectopaedia.rewardsData.getString(selectedArea + "." + group);
-                    String displayGroup = groupDisplayMap.getOrDefault(group, group);
-
-                    // Display completion message and play sound
-                    Bukkit.getScheduler().runTask(collectopaedia, () -> {
-                        p.sendTitle(ChatColor.GREEN + "Completed: " + displayGroup, "Reward: " + reward, 6, 60, 12);
-                        p.playSound(p, Sound.UI_TOAST_CHALLENGE_COMPLETE, SoundCategory.MUSIC, 100, 1);
-                        p.closeInventory();
-                    });
-
-                    //TODO Give the player the rewards for completing the row/page.
-
-                    break; // Exit loop after completing one group
+                    for (Map.Entry<String, List<String>> entry : areaItems.entrySet()) {
+                        String group = entry.getKey();
+                        List<String> groupItems = entry.getValue();
+                        if (!playerClaimedRewards.contains(group) && playerDepositedItems.containsAll(groupItems)) {
+                            // TODO: Give player the reward
+                            collectopaedia.updatePlayerReward(p, selectedArea, group);
+                            Bukkit.getLogger().info("Reward given to player: " + p.getName() + " for group: " + group);
+                        }
+                    }
                 }
-            }
-            if (completedSomething) {
-                Bukkit.getScheduler().runTask(collectopaedia, () -> updatePlayerInv(p, playerInv));
+            } catch (Exception e) {
+                Bukkit.getLogger().log(Level.SEVERE, "Error processing async task", e);
             }
         });
     }
@@ -151,33 +168,33 @@ public class OpenMenuCommand implements TabExecutor {
         // Fetch data asynchronously
         Bukkit.getScheduler().runTaskAsynchronously(collectopaedia, () -> {
             FileConfiguration playerFile = getPlayerData(p);
-            String selectedArea = playerFile.getString(p.getUniqueId() + ".selectedArea");
-            Map<String, List<String>> cachedAreaData = collectopaedia.areaDataCache.get(selectedArea);
+            String selectedArea;
+            Map<String, List<String>> cachedAreaData;
+            Set<String> playerCollectedItems;
+            List<String> playerAreas;
 
-            List<String> vegList = cachedAreaData.get("veg");
-            List<String> fruitList = cachedAreaData.get("fruit");
-            List<String> flowerList = cachedAreaData.get("flower");
-            List<String> animalList = cachedAreaData.get("animal");
-            List<String> bugList = cachedAreaData.get("bug");
-            List<String> natureList = cachedAreaData.get("nature");
-            List<String> partsList = cachedAreaData.get("parts");
-            List<String> strangeList = cachedAreaData.get("strange");
+            // Minimize the synchronized block to improve performance
+            synchronized (playerFile) {
+                selectedArea = playerFile.getString(p.getUniqueId() + ".selectedArea");
+                playerCollectedItems = new HashSet<>(playerFile.getStringList("depositedItems." + selectedArea));
+                playerAreas = playerFile.getStringList("unlockedArea");
+            }
+
+            cachedAreaData = collectopaedia.areaDataCache.get(selectedArea);
 
             // Player data
             PlayerInventory playerInv = p.getInventory();
             Map<Integer, String> playerItemNamesMap = getPlayerItemNames(playerInv);
             List<String> playerItemNames = new ArrayList<>(playerItemNamesMap.values());
-            Set<String> playerCollectedItems = new HashSet<>(playerFile.getStringList("depositedItems." + selectedArea));
             int totalItems = collectopaedia.itemsData.getInt(selectedArea + ".count");
             List<String> areaList = collectopaedia.areasData.getStringList("areas");
-            List<String> playerAreas = playerFile.getStringList("unlockedArea");
 
             // After async processing, switch back to the main thread for GUI updates
             Bukkit.getScheduler().runTask(collectopaedia, () -> {
                 // Update inventory safely on the main thread
                 updateAreaItems(gui, areaList, playerAreas, selectedArea);
                 updatePercentMeter(gui, totalItems, playerCollectedItems);
-                updateCategoryItems(gui, page, vegList, fruitList, flowerList, animalList, bugList, natureList, partsList, strangeList, playerCollectedItems, playerItemNames);
+                updateCategoryItems(gui, page, cachedAreaData, playerCollectedItems, playerItemNames);
 
                 // Update the player inventory view if necessary
                 Inventory currentInv = p.getOpenInventory().getTopInventory();
@@ -283,10 +300,20 @@ public class OpenMenuCommand implements TabExecutor {
     }
 
     // Updates the category items in the inventory GUI
-    private void updateCategoryItems(Inventory gui, int page, List<String> vegList, List<String> fruitList, List<String> flowerList, List<String> animalList, List<String> bugList, List<String> natureList, List<String> partsList, List<String> strangeList, Set<String> playerCollectedItems, List<String> playerItemNames) {
+    // Updates the category items in the inventory GUI
+    private void updateCategoryItems(Inventory gui, int page, Map<String, List<String>> cachedAreaData, Set<String> playerCollectedItems, List<String> playerItemNames) {
 
         // Item settings for different categories
-        Map<String, ItemStack> categoryItems = Map.of("veg", createCategoryItem(Material.EMERALD, 4, "Veg"), "fruit", createCategoryItem(Material.EMERALD, 5, "Fruit"), "flower", createCategoryItem(Material.EMERALD, 6, "Flower"), "animal", createCategoryItem(Material.EMERALD, 7, "Animal"), "bug", createCategoryItem(Material.EMERALD, 8, "Bug"), "nature", createCategoryItem(Material.EMERALD, 9, "Nature"), "parts", createCategoryItem(Material.EMERALD, 10, "Parts"), "strange", createCategoryItem(Material.EMERALD, 11, "Strange"));
+        Map<String, ItemStack> categoryItems = Map.of(
+                "veg", createCategoryItem(Material.EMERALD, 4, "Veg"),
+                "fruit", createCategoryItem(Material.EMERALD, 5, "Fruit"),
+                "flower", createCategoryItem(Material.EMERALD, 6, "Flower"),
+                "animal", createCategoryItem(Material.EMERALD, 7, "Animal"),
+                "bug", createCategoryItem(Material.EMERALD, 8, "Bug"),
+                "nature", createCategoryItem(Material.EMERALD, 9, "Nature"),
+                "parts", createCategoryItem(Material.EMERALD, 10, "Parts"),
+                "strange", createCategoryItem(Material.EMERALD, 11, "Strange")
+        );
 
         ItemStack neededItem = new ItemStack(Material.BLACK_STAINED_GLASS_PANE);
         ItemMeta neededMeta = neededItem.getItemMeta();
@@ -299,17 +326,16 @@ public class OpenMenuCommand implements TabExecutor {
         hasItem.setItemMeta(hasMeta);
 
         // Set items based on a page (page 1 or 2)
-        List<String>[] lists = page == 1 ? new List[]{vegList, fruitList, flowerList, animalList} : new List[]{bugList, natureList, partsList, strangeList};
         String[] categories = page == 1 ? new String[]{"veg", "fruit", "flower", "animal"} : new String[]{"bug", "nature", "parts", "strange"};
         int[] baseSlots = new int[]{10, 19, 28, 37};
 
         // Loop over categories and update inventory
         for (int i = 0; i < categories.length; i++) {
             String category = categories[i];
-            List<String> itemList = lists[i];
+            List<String> itemList = cachedAreaData.get(category);
             int baseSlot = baseSlots[i];
 
-            if (itemList.contains("None")) {
+            if (itemList == null || itemList.contains("None")) {
                 fillEmptySlots(gui, baseSlot, 5);
                 continue;
             }

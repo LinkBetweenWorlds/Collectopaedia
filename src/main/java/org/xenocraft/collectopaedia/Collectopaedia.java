@@ -7,153 +7,102 @@ import org.bukkit.entity.Player;
 import org.bukkit.event.Listener;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.xenocraft.collectopaedia.commands.OpenMenuCommand;
-import org.xenocraft.collectopaedia.commands.ReloadCommand;
 import org.xenocraft.collectopaedia.events.PlayerInvClickEvent;
-import org.xenocraft.collectopaedia.listener.PlayerChangeWorldListener;
 import org.xenocraft.collectopaedia.listener.PlayerJoinLeaveListener;
 
 import java.io.File;
 import java.io.IOException;
 import java.util.List;
-import java.util.Map;
 import java.util.Objects;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Level;
 
 public final class Collectopaedia extends JavaPlugin implements Listener {
 
-    public final Map<String, Map<String, List<String>>> areaDataCache = new ConcurrentHashMap<>();
     public FileConfiguration areasData;
     public FileConfiguration itemsData;
     public FileConfiguration rewardsData;
 
     @Override
     public void onEnable() {
-        // Schedule the plugin initialization on the main thread
-        Bukkit.getScheduler().runTask(this, () -> {
-            createDataFiles();
+        createDataFiles();
 
-            registerListeners();
-            registerCommands();
+        registerEvent();
+        registerCommands();
 
-            getLogger().info("Collectopaedia enabled successfully.");
-        });
-    }
-
-    // Register all event listeners
-    private void registerListeners() {
-        getServer().getPluginManager().registerEvents(this, this);
-        getServer().getPluginManager().registerEvents(new PlayerInvClickEvent(this), this);
-        getServer().getPluginManager().registerEvents(new PlayerJoinLeaveListener(this), this);
-        getServer().getPluginManager().registerEvents(new PlayerChangeWorldListener(this), this);
-    }
-
-    // Register all commands
-    private void registerCommands() {
-        Objects.requireNonNull(getCommand("open")).setExecutor(new OpenMenuCommand(this));
-        Objects.requireNonNull(getCommand("reload")).setExecutor(new ReloadCommand(this));
+        getLogger().log(Level.INFO, "[Collectopaedia] My code works??? How??");
+        getLogger().log(Level.INFO, "[Collectopaedia] Enabled successfully.");
     }
 
     @Override
     public void onDisable() {
-        getLogger().log(Level.INFO, "Disabling Collectopaedia plugin...");
-        // Plugin shutdown logic
+        getLogger().log(Level.INFO, "[Collectopaedia] Disabled successfully.");
     }
 
-    // Create a new player data file if it doesn't exist
-    public void createPlayerFile(Player p) {
-        Bukkit.getScheduler().runTaskAsynchronously(this, () -> {
-            String uuid = p.getUniqueId().toString();
-            File playerDataFolder = new File(getDataFolder(), "playerData");
+    //Register Listener
+    public void registerEvent() {
+        getServer().getPluginManager().registerEvents(this, this);
+        getServer().getPluginManager().registerEvents(new PlayerJoinLeaveListener(this), this);
+        getServer().getPluginManager().registerEvents(new PlayerInvClickEvent(this), this);
+    }
 
+    //Register Commands
+    public void registerCommands() {
+        Objects.requireNonNull(getCommand("open")).setExecutor(new OpenMenuCommand(this));
+    }
+
+    //Create new player file if one does not exist.
+    public void createPlayerFile(Player player) {
+        Bukkit.getScheduler().runTaskAsynchronously(this, () -> {
+            String uuid = player.getUniqueId().toString();
+            File playerDataFolder = new File(getDataFolder(), "playerData");
             // Ensure the playerData folder exists
             if (!playerDataFolder.exists() && !playerDataFolder.mkdirs()) {
-                getLogger().log(Level.WARNING, "Could not create player data folder.");
+                getLogger().log(Level.WARNING, "[Collectopaedia] Could not create player data folder.");
                 return;
             }
+            File file = new File(playerDataFolder, uuid + ".yml");
 
-            File newFile = new File(playerDataFolder, uuid + ".yml");
-
-            // Check if the file already exists
-            if (!newFile.exists()) {
+            if (!file.exists()) {
                 try {
                     // Create the file
-                    if (newFile.createNewFile()) {
-                        FileConfiguration playerFile = YamlConfiguration.loadConfiguration(newFile);
+                    if (file.createNewFile()) {
+                        FileConfiguration playerFile = YamlConfiguration.loadConfiguration(file);
+
+                        //TODO
+                        // Add count of item per area that player has deposited.
+                        // Add list of rewards that player has collected.
 
                         // Fill the file with default data
-                        playerFile.set("name", p.getName());
+                        playerFile.set("name", player.getName());
                         playerFile.set("selectedArea", "colony9");
-                        List<String> list = List.of("other", "colony9");
-                        playerFile.set("unlockedArea", list);
+                        playerFile.set("selectedPage", 0);
+                        List<String> unlockList = List.of("other", "colony9");
+                        List<String> list = List.of("other", "colony9", "tephraCave",
+                                "bionisLeg", "colony6");
+                        playerFile.set("unlockedAreas", unlockList);
                         playerFile.set("depositedItems", list);
+                        for (String area : list) {
+                            playerFile.set("depositedItems." + area + ".count", 0);
+                        }
                         playerFile.set("rewards", "colony9");
 
-                        // Save the data to the file
-                        savePlayerFile(playerFile, p);
 
-                        getLogger().info("Player file created for " + p.getName());
+                        // Save the data to the fileB
+                        savePlayerFile(playerFile, player);
+
+                        getLogger().info("[Collectopaedia] Player file created for " + player.getName());
                     }
                 } catch (IOException e) {
-                    getLogger().log(Level.WARNING, "Could not create or save player file: " + e);
+                    getLogger().log(Level.WARNING, "[Collectopaedia] Could not create or save player file: " + e);
                 }
             } else {
-                getLogger().info("Player file already exists for " + p.getName());
+                getLogger().info("[Collectopaedia] Player file already exists for " + player.getName());
             }
         });
     }
 
-    // Update the player data file with the latest player information
-    public void updatePlayerFile(Player p) {
-        Bukkit.getScheduler().runTaskAsynchronously(this, () -> {
-            FileConfiguration playerFile = loadPlayerData(p);
-            playerFile.set("name", p.getName());
-            playerFile.set("selectedArea", playerFile.getString("selectedArea"));
-            playerFile.set("unlockedArea", playerFile.getStringList("unlockedArea"));
-
-            // Ensure all areas have an entry in depositedItems
-            List<String> areas = areasData.getStringList("areas");
-            for (String a : areas) {
-                String areaKey = a.split(",")[0].trim();
-                if (!playerFile.contains("depositedItems." + areaKey)) {
-                    playerFile.set("depositedItems." + areaKey, List.of());
-                }
-            }
-            savePlayerFile(playerFile, p);
-        });
-    }
-
-    // Update the items deposited by the player in a specific area
-    public void updatePlayerItems(Player p, FileConfiguration playerFile, String item) {
-        Bukkit.getScheduler().runTaskAsynchronously(this, () -> {
-            String selectedArea = playerFile.getString("selectedArea");
-            if (selectedArea == null) {
-                getLogger().log(Level.WARNING, "Selected area not found for player " + p.getName());
-                return;
-            }
-
-            List<String> areaItems = playerFile.getStringList("depositedItems." + selectedArea);
-            areaItems.add(item);
-            playerFile.set("depositedItems." + selectedArea, areaItems);
-            savePlayerFile(playerFile, p);
-        });
-    }
-
-    // Update the player's selected area
-    public void updatePlayerArea(Player p, String area) {
-        Bukkit.getScheduler().runTaskAsynchronously(this, () -> {
-            FileConfiguration playerFile = loadPlayerData(p);
-            playerFile.set("selectedArea", area);
-            savePlayerFile(playerFile, p);
-        });
-    }
-
-    public void updatePlayerReward(Player p, String area, String category) {
-        Bukkit.getScheduler().runTaskAsynchronously(this, () -> {
-            FileConfiguration playerFile = loadPlayerData(p);
-            playerFile.set("rewards." + area, category);
-            savePlayerFile(playerFile, p);
-        });
+    public boolean playerFileExists(Player p) {
+        return new File(getDataFolder() + "/playerData", p.getUniqueId() + ".yml").exists();
     }
 
     // Save the player data file asynchronously
@@ -162,12 +111,11 @@ public final class Collectopaedia extends JavaPlugin implements Listener {
             try {
                 file.save(new File(getDataFolder() + "/playerData", p.getUniqueId() + ".yml"));
             } catch (IOException e) {
-                getLogger().log(Level.WARNING, "Could not save player file for " + p.getName() + ": " + e);
+                getLogger().log(Level.WARNING, "[Collectopaedia] Could not save player file for " + p.getName() + ": " + e);
             }
         });
     }
 
-    // Load player data from the file
     public FileConfiguration loadPlayerData(Player p) {
         File file = new File(getDataFolder() + "/playerData", p.getUniqueId() + ".yml");
         if (!file.exists()) {
@@ -176,65 +124,15 @@ public final class Collectopaedia extends JavaPlugin implements Listener {
         return YamlConfiguration.loadConfiguration(file);
     }
 
-    // Check if the player data file exists
-    public boolean playerFileExists(Player p) {
-        return new File(getDataFolder() + "/playerData", p.getUniqueId() + ".yml").exists();
-    }
-
-    // Add a new area to the player's unlocked areas list
-    public void addArea(Player p, String areaName) {
-        Bukkit.getScheduler().runTaskAsynchronously(this, () -> {
-            FileConfiguration playerFile = loadPlayerData(p);
-            List<String> playerAreaList = playerFile.getStringList("unlockedArea");
-            if (!playerAreaList.contains(areaName)) {
-                playerAreaList.add(areaName);
-                playerFile.set("unlockedArea", playerAreaList);
-                savePlayerFile(playerFile, p);
-            }
-        });
-    }
-
-    // Preload data from area configuration files into cache
-    public void preloadCollectopaediaData() {
-        areaDataCache.clear();
-
-        for (String area : areasData.getKeys(false)) {
-            // Cache different types of items for each area
-            areaDataCache.put(area, Map.of("fruit", itemsData.getStringList(area + ".fruit"), "vegetable", itemsData.getStringList(area + ".vegetable"), "flower", itemsData.getStringList(area + ".flower"), "animal", itemsData.getStringList(area + ".animal"), "bug", itemsData.getStringList(area + ".bug"), "nature", itemsData.getStringList(area + ".nature"), "parts", itemsData.getStringList(area + ".parts"), "strange", itemsData.getStringList(area + ".strange")));
-        }
-        getLogger().info("Collectopaedia data preloaded successfully.");
-    }
-
-    // Create a specific data file if it doesn't exist
-    private void createDataFile(String fileName) {
-        File file = new File(getDataFolder(), fileName);
-        if (!file.exists() && !file.getParentFile().mkdirs()) {
-            getLogger().log(Level.WARNING, "Could not create directory for " + fileName);
-        }
-        saveResource(fileName, false);
-    }
-
     // Create all required data files
     private void createDataFiles() {
-        createDataFile("items.yml");
-        createDataFile("areas.yml");
-        createDataFile("rewards.yml");
-        itemsData = YamlConfiguration.loadConfiguration(new File(getDataFolder(), "items.yml"));
-        areasData = YamlConfiguration.loadConfiguration(new File(getDataFolder(), "areas.yml"));
-        rewardsData = YamlConfiguration.loadConfiguration(new File(getDataFolder(), "rewards.yml"));
-        preloadCollectopaediaData();
-    }
-
-    @Override
-    public synchronized void reloadConfig() {
-        // Reload the plugin's configuration and data files
-        super.reloadConfig();
-        File itemsFile = new File(getDataFolder(), "items.yml");
-        File areasFile = new File(getDataFolder(), "areas.yml");
-        File rewardsFile = new File(getDataFolder(), "rewards.yml");
-
-        itemsData = YamlConfiguration.loadConfiguration(itemsFile);
-        areasData = YamlConfiguration.loadConfiguration(areasFile);
-        rewardsData = YamlConfiguration.loadConfiguration(rewardsFile);
+        Bukkit.getScheduler().runTaskAsynchronously(this, () -> {
+            saveResource("items.yml", true);
+            saveResource("rewards.yml", true);
+            saveResource("areas.yml", true);
+            itemsData = YamlConfiguration.loadConfiguration(new File(getDataFolder(), "items.yml"));
+            areasData = YamlConfiguration.loadConfiguration(new File(getDataFolder(), "areas.yml"));
+            rewardsData = YamlConfiguration.loadConfiguration(new File(getDataFolder(), "rewards.yml"));
+        });
     }
 }

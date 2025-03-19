@@ -7,6 +7,8 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.xenocraft.collectopaedia.Collectopaedia;
 
+import java.util.logging.Level;
+
 public class PlayerJoinLeaveListener implements Listener {
     private final Collectopaedia collectopaedia;
 
@@ -16,13 +18,11 @@ public class PlayerJoinLeaveListener implements Listener {
 
     @EventHandler
     public void onPlayerJoin(PlayerJoinEvent event) {
-        Player p = event.getPlayer();
+        Player player = event.getPlayer();
 
-        if (!collectopaedia.playerFileExists(p)) {
-            collectopaedia.createPlayerFile(p);
-            //collectopaedia.updatePlayerFile(p);
-        } else {
-            collectopaedia.updatePlayerFile(p);
+        if (!collectopaedia.playerFileExists(player)) {
+            Bukkit.getLogger().log(Level.WARNING, "Player " + player.getName() + " does not exist.");
+            collectopaedia.createPlayerFile(player);
         }
     }
 }
